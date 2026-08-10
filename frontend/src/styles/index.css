@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #0f766e;
+  --brand-deep: #134e4a;
+  --surface: #faf8f3;
+  --ink: #0b2424;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Source Sans 3', Segoe UI, sans-serif;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(20, 184, 166, 0.16), transparent 35%),
+    radial-gradient(circle at 88% 0%, rgba(15, 118, 110, 0.12), transparent 30%),
+    linear-gradient(180deg, #faf8f3 0%, #f3efe6 100%);
+  min-height: 100vh;
+}
+
+.dark body,
+html.dark body {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(20, 184, 166, 0.12), transparent 30%),
+    linear-gradient(180deg, #071a1a 0%, #0b2424 100%);
+  color: #f3efe6;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-moss-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-300;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-md border border-ink-700/15 bg-white/70 px-5 py-2.5 text-sm font-semibold text-ink-900 backdrop-blur transition hover:bg-white dark:border-white/10 dark:bg-ink-800 dark:text-sand-50;
+  }
+
+  .panel {
+    @apply rounded-2xl border border-ink-700/10 bg-white/80 p-5 shadow-soft backdrop-blur dark:border-white/10 dark:bg-ink-800/80;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-ink-700/15 bg-white px-3 py-2 text-sm outline-none ring-moss-300 focus:ring-2 dark:border-white/10 dark:bg-ink-900;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-md bg-ink-700/10 dark:bg-white/10;
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal-up {
+  animation: reveal-up 0.55s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal-up,
+  .group-hover\:scale-\[1\.02\]:hover,
+  .hover\:-translate-y-0\.5:hover {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}

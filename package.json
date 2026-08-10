@@ -1,0 +1,16 @@
+{
+  "name": "arms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Academic Resource Management System — root scripts",
+  "scripts": {
+    "start": "npm run start --prefix backend",
+    "dev": "npm run dev --prefix backend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "test": "npm test --prefix backend",
+    "seed:superadmin": "npm run seed:superadmin --prefix backend",
+    "seed:admin": "npm run seed:admin --prefix backend"
+  }
+}

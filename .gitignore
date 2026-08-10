@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+backend/logs/*
+!backend/logs/.gitkeep
+
+# Uploads / temp
+uploads/
+backend/uploads/temp/*
+!backend/uploads/temp/.gitkeep
+*.tmp
+*.temp
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# Docker
+docker-data/
+
+# Backups (local)
+backups/
+*.dump
+*.archive
+
+# Test artifacts
+.nyc_output/
+test-results/
+
+# Misc
+*.pem
+*.key
+.cache/
