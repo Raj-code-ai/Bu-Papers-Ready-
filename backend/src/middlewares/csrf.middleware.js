@@ -7,7 +7,7 @@ function issueCsrfToken(req, res, next) {
     const token = generateCsrfToken();
     res.cookie('csrfToken', token, {
       httpOnly: false,
-      sameSite: 'lax',
+      sameSite: env.cookieSecure ? 'none' : 'lax',
       secure: env.cookieSecure,
       maxAge: 24 * 60 * 60 * 1000,
     });

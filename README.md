@@ -32,18 +32,16 @@ Undergraduate / Postgraduate
 
 Super Admin enables/disables and CRUD’s every node. Seed is editable defaults only.
 
-## Quick start
+## Quick start (local)
 
 ```bash
 # Backend
 cd backend
-cp ../.env.example .env   # set MongoDB + JWT secrets
+cp ../.env.example .env   # set MongoDB + Cloudinary
 npm install
 npm run seed:superadmin
 npm run seed:admin
-npm run seed:defaults          # taxonomy + policies
-# Optional remapping of legacy Class 1–12 papers:
-npm run migrate:taxonomy-v2
+npm run seed:defaults
 npm run dev                    # :3008
 
 # Frontend
@@ -60,6 +58,17 @@ npm run dev                    # :3011
 | Admin | `admin@arms.local` | `ChangeMe!Admin1` |
 
 Change these in production. Production rejects insecure default JWT/CSRF secrets.
+
+## Deploy (GitHub → Render + Vercel)
+
+See **[docs/deployment/DEPLOYMENT_NOTES.md](docs/deployment/DEPLOYMENT_NOTES.md)**.
+
+| Host | Root | Notes |
+|------|------|--------|
+| **Render** (API) | `backend` | Set `MONGODB_URI`, JWT/CSRF, Cloudinary, then `FRONTEND_URL` / `CORS_ORIGINS` to Vercel URL |
+| **Vercel** (UI) | `frontend` | Set `VITE_API_BASE_URL=https://YOUR-API.onrender.com/api/v1`; uses `vercel.json` SPA rewrites |
+
+Live API example: `https://bu-papers-ready.onrender.com/api/v1/health`
 
 ## Scripts
 
@@ -83,6 +92,7 @@ Home · Question Papers (cascading filters) · About · Developers · Contact ·
 ## Docs
 
 - [Final platform audit](docs/FINAL_PLATFORM_AUDIT.md)
+- [Deployment guide](docs/deployment/DEPLOYMENT_NOTES.md)
 
 ## License
 

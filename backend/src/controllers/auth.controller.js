@@ -16,7 +16,8 @@ function setAuthCookies(res, accessToken, refreshToken) {
   const common = {
     httpOnly: true,
     secure: env.cookieSecure,
-    sameSite: 'lax',
+    // Cross-site SPA (Vercel) → API (Render) needs SameSite=None + Secure.
+    sameSite: env.cookieSecure ? 'none' : 'lax',
   };
 
   res.cookie('accessToken', accessToken, {
