@@ -22,10 +22,17 @@ Repo: https://github.com/Raj-code-ai/Bu-Papers-Ready_
    - `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CSRF_SECRET` (unique, long)
    - `CLOUDINARY_*`, `STORAGE_PROVIDER=cloudinary`
    - `NODE_ENV=production`, `COOKIE_SECURE=true`, `SWAGGER_ENABLED=false`
-5. After frontend is live, set:
-   - `FRONTEND_URL=https://YOUR-APP.vercel.app`
-   - `CORS_ORIGINS=https://YOUR-APP.vercel.app`
-   - `API_BASE_URL=https://YOUR-API.onrender.com`
+5. After Vercel is live, set CORS to your **real** frontend URL(s) (no trailing slash).
+
+Current production example:
+
+```env
+FRONTEND_URL=https://bu-papers-ready-jlgx.vercel.app
+CORS_ORIGINS=https://bu-papers-ready-jlgx.vercel.app,https://*.vercel.app
+API_BASE_URL=https://bu-papers-ready.onrender.com
+```
+
+`https://*.vercel.app` allows Vercel production + preview domains.
 
 Optional: `render.yaml` at repo root for Blueprint deploys.
 
@@ -38,8 +45,10 @@ Optional: `render.yaml` at repo root for Blueprint deploys.
    - **Build:** `npm run build`
    - **Output:** `dist`
 3. Environment:
-   - `VITE_API_BASE_URL=https://YOUR-API.onrender.com/api/v1`
+   - `VITE_API_BASE_URL=https://bu-papers-ready.onrender.com/api/v1`
 4. `frontend/vercel.json` rewrites all routes to `index.html` (required for `/login`, `/admin`, etc.).
+
+Live frontend example: `https://bu-papers-ready-jlgx.vercel.app`
 
 Redeploy Vercel after changing `VITE_*` (build-time vars).
 
