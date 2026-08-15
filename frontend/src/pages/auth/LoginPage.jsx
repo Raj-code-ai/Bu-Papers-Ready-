@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext';
 import { useInstitution } from '../../store/InstitutionContext';
+import { LoadingSkeleton } from '../../components/common/States';
 
 function mapLoginError(err) {
   const code = err.response?.data?.code;
@@ -55,7 +56,7 @@ function mapLoginError(err) {
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const { branding } = useInstitution();
+  const { branding, ready } = useInstitution();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '', twoFactorCode: '' });
   const [error, setError] = useState('');
@@ -92,14 +93,22 @@ export default function LoginPage() {
     }
   }
 
-  const brandLabel = branding.institutionName || branding.siteName || 'Question Papers';
+  const brandLabel = branding.institutionName || branding.siteName || branding.shortName || '';
+
+  if (!ready) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
+        <LoadingSkeleton rows={5} />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
       <form onSubmit={onSubmit} className="panel space-y-4">
         <div>
           <Link to="/" className="font-display text-2xl font-bold text-moss-500">
-            {brandLabel}
+            {brandLabel || 'Staff login'}
           </Link>
           <h1 className="mt-3 font-display text-2xl font-semibold">Staff login</h1>
           <p className="mt-1 text-sm text-ink-700/70 dark:text-sand-100/70">

@@ -2,14 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { publicApi } from '../services/endpoints';
 
 const InstitutionContext = createContext(null);
+const BRANDING_CACHE_KEY = 'arms_site_branding_v2';
 
 const FALLBACK = {
-  institutionName: 'Academic Institution',
+  institutionName: '',
   shortName: '',
-  siteName: 'Question Papers Platform',
-  tagline: 'Browse, view, and download academic question papers',
-  aboutText:
-    'This platform provides authorized academic question papers and resources for students of this institution.',
+  siteName: '',
+  tagline: '',
+  aboutText: '',
   logoUrl: '',
   faviconUrl: '',
   primaryColor: '#0F766E',
@@ -28,13 +28,38 @@ const FALLBACK = {
   developerLinkedinUrl: '',
 };
 
-function applySiteConfig(data, setBranding, setMaintenance) {
+function readCachedBranding() {
+  try {
+    const raw = localStorage.getItem(BRANDING_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return { ...FALLBACK, ...parsed };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedBranding(branding) {
+  try {
+    localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(branding));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function normalizeBranding(data) {
   const branding = { ...FALLBACK, ...(data?.branding || {}) };
-  // Prefer explicit institution name; keep shortName only as secondary label.
   if (!branding.institutionName && branding.siteName) {
     branding.institutionName = branding.siteName;
   }
+  return branding;
+}
+
+function applySiteConfig(data, setBranding, setMaintenance) {
+  const branding = normalizeBranding(data);
   setBranding(branding);
+  writeCachedBranding(branding);
   setMaintenance({
     enabled: Boolean(data?.maintenanceMode && data?.maintenanceBlockPublic !== false),
     message:
@@ -45,12 +70,12 @@ function applySiteConfig(data, setBranding, setMaintenance) {
 }
 
 export function InstitutionProvider({ children }) {
-  const [branding, setBranding] = useState(FALLBACK);
+  const [branding, setBranding] = useState(() => readCachedBranding() || FALLBACK);
   const [maintenance, setMaintenance] = useState({
     enabled: false,
     message: 'Website temporarily unavailable while maintenance is being performed.',
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !readCachedBranding());
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
@@ -62,15 +87,21 @@ export function InstitutionProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     refresh()
       .catch((err) => {
-        setError(err.response?.data?.message || 'Unable to load institution settings.');
+        if (!cancelled) {
+          setError(err.response?.data?.message || 'Unable to load institution settings.');
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
-  // Pick up Super Admin branding changes when returning to the tab.
   useEffect(() => {
     const onFocus = () => {
       refresh().catch(() => {});
@@ -80,7 +111,10 @@ export function InstitutionProvider({ children }) {
   }, [refresh]);
 
   useEffect(() => {
-    document.title = `${branding.institutionName || branding.shortName} · Question Papers`;
+    const titleName = branding.institutionName || branding.shortName || branding.siteName;
+    if (titleName) {
+      document.title = `${titleName} · Question Papers`;
+    }
     const root = document.documentElement;
     root.style.setProperty('--brand', branding.primaryColor || FALLBACK.primaryColor);
     root.style.setProperty('--brand-deep', branding.secondaryColor || FALLBACK.secondaryColor);
@@ -95,18 +129,25 @@ export function InstitutionProvider({ children }) {
     }
   }, [branding]);
 
+  const ready = !loading || Boolean(branding.institutionName || branding.siteName || branding.logoUrl);
+
   const value = useMemo(
     () => ({
       branding,
       maintenance,
       loading,
+      ready,
       error,
       refresh,
       applyBranding: (partial) => {
-        setBranding((prev) => ({ ...prev, ...partial }));
+        setBranding((prev) => {
+          const next = { ...prev, ...partial };
+          writeCachedBranding(next);
+          return next;
+        });
       },
     }),
-    [branding, maintenance, loading, error, refresh]
+    [branding, maintenance, loading, ready, error, refresh]
   );
 
   return <InstitutionContext.Provider value={value}>{children}</InstitutionContext.Provider>;

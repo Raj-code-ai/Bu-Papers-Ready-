@@ -1,17 +1,21 @@
-import { useEffect } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useTheme } from '../../store/ThemeContext';
 import { useAuth } from '../../store/AuthContext';
 import { useInstitution } from '../../store/InstitutionContext';
+import { LoadingSkeleton } from '../common/States';
 
 export default function StudentLayout() {
   const { toggleTheme, theme } = useTheme();
   const { user } = useAuth();
-  const { branding, maintenance, refresh } = useInstitution();
+  const { branding, maintenance, ready, loading } = useInstitution();
 
-  useEffect(() => {
-    refresh().catch(() => {});
-  }, [refresh]);
+  if (!ready) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 py-16">
+        <LoadingSkeleton rows={6} />
+      </div>
+    );
+  }
 
   if (maintenance.enabled && !(user && (user.role === 'admin' || user.role === 'superadmin'))) {
     return (
@@ -33,6 +37,8 @@ export default function StudentLayout() {
   const footerLinkClass =
     'hover:text-moss-500 focus:outline-none focus:ring-2 focus:ring-moss-300 rounded-sm';
 
+  const displayName = branding.institutionName || branding.siteName || branding.shortName || '';
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-ink-700/10 bg-sand-50/80 backdrop-blur dark:border-white/10 dark:bg-ink-950/80">
@@ -41,12 +47,12 @@ export default function StudentLayout() {
             {branding.logoUrl ? (
               <img
                 src={branding.logoUrl}
-                alt={`${branding.institutionName || 'Institution'} logo`}
+                alt={`${displayName || 'Institution'} logo`}
                 className="h-9 w-9 rounded object-contain"
               />
             ) : null}
             <span className="truncate font-display text-lg font-bold tracking-tight text-moss-500 md:text-xl">
-              {branding.institutionName || branding.shortName || '[Institution Name]'}
+              {displayName}
             </span>
           </Link>
           <nav className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold" aria-label="Primary">
@@ -85,14 +91,13 @@ export default function StudentLayout() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8">
+        {loading ? <div className="sr-only" aria-live="polite">Updating institution settings</div> : null}
         <Outlet />
       </main>
 
       <footer className="border-t border-ink-700/10 py-10 dark:border-white/10">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 text-center text-sm text-ink-700/70 dark:text-sand-100/60">
-          <p className="font-semibold text-ink-900 dark:text-sand-50">
-            {branding.institutionName || '[Institution Name]'}
-          </p>
+          <p className="font-semibold text-ink-900 dark:text-sand-50">{displayName}</p>
           {branding.footerText ? <p>{branding.footerText}</p> : null}
 
           <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 font-semibold" aria-label="Footer">
