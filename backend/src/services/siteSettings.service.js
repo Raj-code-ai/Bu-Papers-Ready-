@@ -1,9 +1,58 @@
 const fs = require('fs');
 const path = require('path');
+const { Readable } = require('stream');
+const { v2: cloudinary } = require('cloudinary');
 const { WebsiteSettings, SystemConfig } = require('../models');
 const AppError = require('../utils/AppError');
 const env = require('../config/env');
 const { writeAuditLog } = require('./auditLog.service');
+const logger = require('../config/logger');
+
+let cloudinaryConfigured = false;
+
+function ensureCloudinary() {
+  if (cloudinaryConfigured) return;
+  if (!env.cloudinary?.cloudName || !env.cloudinary?.apiKey || !env.cloudinary?.apiSecret) {
+    throw new AppError(
+      'Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      503,
+      'STORAGE_NOT_CONFIGURED'
+    );
+  }
+  cloudinary.config({
+    cloud_name: env.cloudinary.cloudName,
+    api_key: env.cloudinary.apiKey,
+    api_secret: env.cloudinary.apiSecret,
+    secure: true,
+  });
+  cloudinaryConfigured = true;
+}
+
+function uploadImageBuffer(fileBuffer, options = {}) {
+  ensureCloudinary();
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'image',
+        folder: options.folder || `${env.cloudinary.folder || 'arms'}/branding`,
+        public_id: options.publicId,
+        overwrite: true,
+      },
+      (error, result) => {
+        if (error) {
+          logger.error('Cloudinary image upload failed', { error: error.message });
+          return reject(
+            new AppError('Failed to upload image to cloud storage', 502, 'STORAGE_UPLOAD_FAILED', [
+              { field: 'file', msg: error.message },
+            ])
+          );
+        }
+        return resolve(result.secure_url || result.url);
+      }
+    );
+    Readable.from(fileBuffer).pipe(stream);
+  });
+}
 
 const DEFAULT_BRANDING = {
   institutionName: 'Academic Institution',
@@ -365,29 +414,13 @@ async function uploadDeveloperPhoto(actor, developerId, file, context = {}) {
   const developer = doc.developers.id(developerId);
   if (!developer) throw new AppError('Developer not found', 404, 'NOT_FOUND');
 
-  ensureDevelopersDir();
-  const ext =
-    file.mimetype === 'image/png'
-      ? '.png'
-      : file.mimetype === 'image/webp'
-        ? '.webp'
-        : file.mimetype === 'image/gif'
-          ? '.gif'
-          : '.jpg';
-  const filename = `${developerId}-${Date.now()}${ext}`;
-  const fullPath = path.join(DEVELOPERS_DIR, filename);
-  fs.writeFileSync(fullPath, file.buffer);
+  const photoUrl = await uploadImageBuffer(file.buffer, {
+    folder: `${env.cloudinary.folder || 'arms'}/developers`,
+    publicId: `developer-${developerId}-${Date.now()}`,
+  });
 
-  if (developer.photoUrl && developer.photoUrl.startsWith('/uploads/developers/')) {
-    const old = path.join(DEVELOPERS_DIR, path.basename(developer.photoUrl));
-    try {
-      fs.unlinkSync(old);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  developer.photoUrl = `/uploads/developers/${filename}`;
+  unlinkLocalUpload(developer.photoUrl);
+  developer.photoUrl = photoUrl;
   doc.updatedBy = actor._id;
   await doc.save();
 
@@ -465,25 +498,13 @@ async function uploadBrandingImage(actor, kind, file, context = {}) {
   }
 
   const doc = await getWebsiteSettingsDoc();
-  ensureBrandingDir();
-
-  const ext =
-    file.mimetype === 'image/png'
-      ? '.png'
-      : file.mimetype === 'image/webp'
-        ? '.webp'
-        : file.mimetype === 'image/gif'
-          ? '.gif'
-          : file.mimetype.includes('icon')
-            ? '.ico'
-            : '.jpg';
-
-  const filename = `${kind}-${Date.now()}${ext}`;
-  const fullPath = path.join(BRANDING_DIR, filename);
-  fs.writeFileSync(fullPath, file.buffer);
+  const imageUrl = await uploadImageBuffer(file.buffer, {
+    folder: `${env.cloudinary.folder || 'arms'}/branding`,
+    publicId: `${kind}-${Date.now()}`,
+  });
 
   unlinkLocalUpload(doc[field]);
-  doc[field] = `/uploads/branding/${filename}`;
+  doc[field] = imageUrl;
   doc.updatedBy = actor._id;
   await doc.save();
 
