@@ -18,6 +18,23 @@ function issueCsrfToken(req, res, next) {
   return next();
 }
 
+function requestPath(req) {
+  return String(req.originalUrl || req.url || req.path || '').split('?')[0];
+}
+
+function isAuthBootstrapPath(req) {
+  const path = requestPath(req);
+  const markers = [
+    '/auth/login',
+    '/auth/refresh',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+    '/auth/2fa/setup',
+    '/auth/2fa/verify',
+  ];
+  return markers.some((marker) => path === marker || path.endsWith(marker) || path.includes(marker));
+}
+
 function csrfProtection(req, res, next) {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     return next();
@@ -29,15 +46,8 @@ function csrfProtection(req, res, next) {
     return next();
   }
 
-  // Public auth endpoints issue tokens and are rate-limited separately.
-  const path = req.originalUrl || req.path || '';
-  const csrfExemptPrefixes = [
-    '/api/v1/auth/login',
-    '/api/v1/auth/refresh',
-    '/api/v1/auth/forgot-password',
-    '/api/v1/auth/reset-password',
-  ];
-  if (csrfExemptPrefixes.some((prefix) => path.startsWith(prefix))) {
+  // Login / refresh / password / 2FA bootstrap must work from Vercel without CSRF header.
+  if (isAuthBootstrapPath(req)) {
     return next();
   }
 
@@ -54,4 +64,5 @@ function csrfProtection(req, res, next) {
 module.exports = {
   issueCsrfToken,
   csrfProtection,
+  isAuthBootstrapPath,
 };
