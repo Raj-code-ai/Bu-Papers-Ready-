@@ -1,7 +1,14 @@
 import axios from 'axios';
 
+function resolveApiBaseUrl() {
+  const raw = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3008/api/v1').trim();
+  const trimmed = raw.replace(/\/+$/, '');
+  if (trimmed.endsWith('/api/v1')) return trimmed;
+  return `${trimmed}/api/v1`;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3008/api/v1',
+  baseURL: resolveApiBaseUrl(),
   withCredentials: true,
   timeout: 60000,
 });
@@ -45,7 +52,7 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           const { data } = await axios.post(
-            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3008/api/v1'}/auth/refresh`,
+            `${resolveApiBaseUrl()}/auth/refresh`,
             { refreshToken },
             { withCredentials: true }
           );
