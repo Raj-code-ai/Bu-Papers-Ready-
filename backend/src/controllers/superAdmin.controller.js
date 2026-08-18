@@ -69,6 +69,11 @@ const listTaxonomy = asyncHandler(async (req, res) => {
   return success(res, data.items, 'Taxonomy fetched', 200, data.meta);
 });
 
+const ensureStandardSemesters = asyncHandler(async (req, res) => {
+  const data = await taxonomyService.ensureStandardSemesters(req.user, ctx(req));
+  return success(res, data, 'Standard UG/PG semesters ensured');
+});
+
 const createTaxonomy = asyncHandler(async (req, res) => {
   const data = await taxonomyService.createTaxonomy(
     req.user,
@@ -281,6 +286,7 @@ module.exports = {
   auditLogs,
   listTaxonomy,
   createTaxonomy,
+  ensureStandardSemesters,
   updateTaxonomy,
   deleteTaxonomy,
   reorderTaxonomy,

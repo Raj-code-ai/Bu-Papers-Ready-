@@ -108,6 +108,46 @@ export default function SuperAdminAcademicPage() {
 
   const cfg = useMemo(() => RESOURCES.find((r) => r.key === resource), [resource]);
 
+  const selectedLevel = useMemo(() => {
+    if (!createForm.academicLevelId) return null;
+    return (filterOptions.academicLevelId || []).find((item) =>
+      idEq(itemId(item), createForm.academicLevelId)
+    );
+  }, [createForm.academicLevelId, filterOptions.academicLevelId]);
+
+  const selectedLevelKind = selectedLevel?.kind || '';
+  const isSchoolSubject = resource === 'subjects' && selectedLevelKind === 'school_band';
+  const isHigherEdSubject =
+    resource === 'subjects' && (selectedLevelKind === 'ug' || selectedLevelKind === 'pg');
+
+  const filterFieldOptions = useMemo(() => {
+    const levelId = filters.academicLevelId;
+    const programmeId = filters.programmeId;
+    const departmentId = filters.departmentId;
+
+    return {
+      academicLevelId: filterOptions.academicLevelId || [],
+      programmeId: (filterOptions.programmeId || []).filter(
+        (item) => !levelId || idEq(item.academicLevelId, levelId)
+      ),
+      departmentId: (filterOptions.departmentId || []).filter(
+        (item) => !programmeId || idEq(item.programmeId, programmeId)
+      ),
+      semesterId: (filterOptions.semesterId || []).filter((item) => {
+        if (departmentId) return idEq(item.departmentId, departmentId);
+        if (programmeId) return idEq(item.programmeId, programmeId);
+        if (levelId) return idEq(item.academicLevelId, levelId);
+        return true;
+      }),
+      classNodeId: (filterOptions.classNodeId || []).filter((item) => {
+        if (departmentId && item.departmentId) return idEq(item.departmentId, departmentId);
+        if (programmeId && item.programmeId) return idEq(item.programmeId, programmeId);
+        if (levelId) return idEq(item.academicLevelId, levelId);
+        return true;
+      }),
+    };
+  }, [filters, filterOptions]);
+
   const createFieldOptions = useMemo(() => {
     const levelId = createForm.academicLevelId;
     const programmeId = createForm.programmeId;
@@ -152,7 +192,7 @@ export default function SuperAdminAcademicPage() {
     const entries = await Promise.all(
       unique.map(async (field) => {
         const src = FILTER_SOURCES[field];
-        const res = await superAdminApi.listTaxonomy(src.resource, { limit: 500 });
+        const res = await superAdminApi.listTaxonomy(src.resource, { limit: 2000 });
         return [field, res.data.data || []];
       })
     );
@@ -163,7 +203,7 @@ export default function SuperAdminAcademicPage() {
     setLoading(true);
     setError('');
     try {
-      const params = { limit: 500, ...filters };
+      const params = { limit: 2000, ...filters };
       Object.keys(params).forEach((k) => {
         if (!params[k]) delete params[k];
       });
@@ -254,6 +294,42 @@ export default function SuperAdminAcademicPage() {
     }
   }
 
+  async function onEnsureStandardSemesters() {
+    setMessage('');
+    setError('');
+    try {
+      const res = await superAdminApi.ensureStandardSemesters();
+      const data = res.data.data || {};
+      setMessage(
+        `Standard semesters ready: ${data.semestersCreated || 0} created, ${data.semestersExisting || 0} already present across ${data.departmentsProcessed || 0} UG/PG departments (UG 1–8, PG 1–4).`
+      );
+      if (resource === 'semesters') await loadItems();
+      await loadFilterOptions(resource);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message);
+    }
+  }
+
+  function setFilterField(field, value) {
+    setFilters((current) => {
+      const next = { ...current, [field]: value };
+      if (field === 'academicLevelId') {
+        next.programmeId = '';
+        next.departmentId = '';
+        next.semesterId = '';
+        next.classNodeId = '';
+      } else if (field === 'programmeId') {
+        next.departmentId = '';
+        next.semesterId = '';
+        next.classNodeId = '';
+      } else if (field === 'departmentId') {
+        next.semesterId = '';
+        next.classNodeId = '';
+      }
+      return next;
+    });
+  }
+
   function setCreateField(field, value) {
     setCreateForm((current) => {
       const next = { ...current, [field]: value };
@@ -269,6 +345,9 @@ export default function SuperAdminAcademicPage() {
       } else if (field === 'departmentId') {
         next.semesterId = '';
         next.classNodeId = '';
+      } else if (field === 'number') {
+        const num = Number(value);
+        if (num) next.name = `Semester ${num}`;
       } else if (field === 'semesterId' && value) {
         const semester = (filterOptions.semesterId || []).find((item) => idEq(itemId(item), value));
         if (semester) {
@@ -316,11 +395,16 @@ export default function SuperAdminAcademicPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-semibold">Academic structure</h1>
-        <p className="mt-1 text-sm text-ink-700/70 dark:text-sand-100/70">
-          Manage levels, programmes, departments, and related taxonomy used for paper uploads.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold">Academic structure</h1>
+          <p className="mt-1 text-sm text-ink-700/70 dark:text-sand-100/70">
+            Manage levels, programmes, departments, and related taxonomy used for paper uploads.
+          </p>
+        </div>
+        <button type="button" className="btn-secondary !py-1.5" onClick={onEnsureStandardSemesters}>
+          Ensure UG 1–8 / PG 1–4 semesters
+        </button>
       </div>
       {message && <p className="panel text-moss-500">{message}</p>}
       {error && <ErrorState message={error} />}
@@ -345,7 +429,9 @@ export default function SuperAdminAcademicPage() {
               field,
               `Filter by ${FILTER_SOURCES[field]?.label || field}`,
               filters[field],
-              (val) => setFilters((f) => ({ ...f, [field]: val }))
+              (val) => setFilterField(field, val),
+              false,
+              filterFieldOptions[field]
             )
           )}
           <div className="flex items-end">
@@ -359,17 +445,24 @@ export default function SuperAdminAcademicPage() {
       <form onSubmit={onCreate} className="panel grid gap-3 md:grid-cols-3">
         {resource === 'subjects' ? (
           <p className="md:col-span-3 text-sm text-ink-700/70 dark:text-sand-100/70">
-            For UG/PG subjects: choose Level → Programme → Department → Semester, then add the subject.
-            Semester labels include the department name so you pick the correct “Semester 2”.
+            UG/PG: Level → Programme → Department → Semester → subject name.
+            School: Level → Class → subject name. Semester labels include department so you pick the right one.
+          </p>
+        ) : null}
+        {resource === 'semesters' ? (
+          <p className="md:col-span-3 text-sm text-ink-700/70 dark:text-sand-100/70">
+            Prefer “Ensure UG 1–8 / PG 1–4 semesters” for every department. Manual create needs Level →
+            Programme → Department → semester number.
           </p>
         ) : null}
         <label className="block text-sm md:col-span-3">
           Name
           <input
             className="input mt-1"
-            required
+            required={resource !== 'semesters'}
             value={createForm.name}
             onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder={resource === 'semesters' ? 'Auto-filled from semester number' : ''}
           />
         </label>
         {cfg?.createFields?.includes('kind') && (
@@ -395,7 +488,7 @@ export default function SuperAdminAcademicPage() {
             'Level',
             createForm.academicLevelId,
             (val) => setCreateField('academicLevelId', val),
-            resource === 'programmes' || resource === 'subjects',
+            resource === 'programmes' || resource === 'subjects' || resource === 'semesters',
             createFieldOptions.academicLevelId
           )}
         {cfg?.createFields?.includes('parentProgrammeId') &&
@@ -413,7 +506,7 @@ export default function SuperAdminAcademicPage() {
             'Programme',
             createForm.programmeId,
             (val) => setCreateField('programmeId', val),
-            resource === 'departments' || resource === 'subjects',
+            resource === 'departments' || resource === 'subjects' || resource === 'semesters',
             createFieldOptions.programmeId
           )}
         {cfg?.createFields?.includes('departmentId') &&
@@ -422,25 +515,25 @@ export default function SuperAdminAcademicPage() {
             'Department',
             createForm.departmentId,
             (val) => setCreateField('departmentId', val),
-            resource === 'subjects',
+            resource === 'subjects' || resource === 'semesters',
             createFieldOptions.departmentId
           )}
-        {cfg?.createFields?.includes('semesterId') &&
+        {cfg?.createFields?.includes('semesterId') && !isSchoolSubject &&
           renderSelect(
             'semesterId',
             'Semester (UG/PG)',
             createForm.semesterId,
             (val) => setCreateField('semesterId', val),
-            false,
+            isHigherEdSubject,
             createFieldOptions.semesterId
           )}
-        {cfg?.createFields?.includes('classNodeId') &&
+        {cfg?.createFields?.includes('classNodeId') && !isHigherEdSubject &&
           renderSelect(
             'classNodeId',
             'Class (school only)',
             createForm.classNodeId,
             (val) => setCreateField('classNodeId', val),
-            false,
+            isSchoolSubject,
             createFieldOptions.classNodeId
           )}
         {cfg?.createFields?.includes('number') && (
@@ -450,8 +543,10 @@ export default function SuperAdminAcademicPage() {
               className="input mt-1"
               type="number"
               min={1}
+              max={selectedLevelKind === 'pg' ? 4 : 8}
+              required={resource === 'semesters'}
               value={createForm.number}
-              onChange={(e) => setCreateForm((f) => ({ ...f, number: e.target.value }))}
+              onChange={(e) => setCreateField('number', e.target.value)}
             />
           </label>
         )}
@@ -549,8 +644,14 @@ export default function SuperAdminAcademicPage() {
                       <p className="font-semibold">{item.name}</p>
                       <p className="text-sm text-ink-700/70 dark:text-sand-100/70">
                         {item.kind ? `Kind: ${item.kind} · ` : ''}
+                        {item.number != null ? `Number: ${item.number} · ` : ''}
                         {item.code ? `Code: ${item.code} · ` : ''}
-                        {item.startYear ? `${item.startYear}–${item.endYear} · ` : ''}
+                        {item.departmentId
+                          ? `Dept: ${(filterOptions.departmentId || []).find((d) => idEq(itemId(d), item.departmentId))?.name || '—'} · `
+                          : ''}
+                        {item.semesterId
+                          ? `Sem: ${(filterOptions.semesterId || []).find((s) => idEq(itemId(s), item.semesterId))?.name || 'linked'} · `
+                          : ''}
                         {item.isEnabled ? 'Enabled' : 'Disabled'}
                       </p>
                     </>

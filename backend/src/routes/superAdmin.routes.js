@@ -103,10 +103,20 @@ router.post('/backups/:id/verify', param('id').isMongoId(), validate, controller
 router.post('/backups/:id/restore', param('id').isMongoId(), validate, controller.restoreBackup);
 router.get('/backups/:id/download', param('id').isMongoId(), validate, controller.downloadBackup);
 
+router.post('/ensure-standard-semesters', controller.ensureStandardSemesters);
+
 router.get(`/:resource(${taxonomyResources})`, controller.listTaxonomy);
 router.post(
   `/:resource(${taxonomyResources})`,
-  body('name').trim().notEmpty(),
+  body('name').custom((value, { req }) => {
+    if (req.params.resource === 'semesters' && (req.body.number || req.body.number === 0)) {
+      return true;
+    }
+    if (!value || !String(value).trim()) {
+      throw new Error('name is required');
+    }
+    return true;
+  }),
   validate,
   controller.createTaxonomy
 );

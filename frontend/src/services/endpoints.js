@@ -91,4 +91,5 @@ export const superAdminApi = {
   deleteTaxonomy: (resource, id) => api.delete(`/superadmin/${resource}/${id}`),
   reorderTaxonomy: (resource, orderedIds) =>
     api.post(`/superadmin/${resource}/reorder`, { orderedIds }),
+  ensureStandardSemesters: () => api.post('/superadmin/ensure-standard-semesters'),
 };

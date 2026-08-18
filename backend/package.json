@@ -12,7 +12,8 @@
     "seed:superadmin": "node scripts/seedSuperAdmin.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:defaults": "node scripts/seedDefaults.js",
-    "migrate:taxonomy-v2": "node scripts/migrateTaxonomyV2.js"
+    "migrate:taxonomy-v2": "node scripts/migrateTaxonomyV2.js",
+    "ensure:semesters": "node scripts/ensureStandardSemesters.js"
   },
   "engines": {
     "node": "24.x"
