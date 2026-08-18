@@ -239,18 +239,39 @@ export default function SuperAdminAcademicPage() {
         setError('Choose a semester (UG/PG) or a class (school) before adding a subject.');
         return;
       }
+      if (resource === 'semesters') {
+        if (!createForm.departmentId) {
+          setError('Select the department first, then enter the semester number.');
+          return;
+        }
+        if (!createForm.number) {
+          setError('Enter a semester number (UG: 1–8, PG: 1–4).');
+          return;
+        }
+      }
       const payload = { ...createForm };
       if (payload.number !== undefined && payload.number !== '') payload.number = Number(payload.number);
       if (payload.startYear !== undefined && payload.startYear !== '')
         payload.startYear = Number(payload.startYear);
       if (payload.endYear !== undefined && payload.endYear !== '')
         payload.endYear = Number(payload.endYear);
+      if (resource === 'semesters' && payload.number && !payload.name) {
+        payload.name = `Semester ${payload.number}`;
+      }
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') delete payload[k];
       });
-      await superAdminApi.createTaxonomy(resource, payload);
+      const res = await superAdminApi.createTaxonomy(resource, payload);
+      const created = res.data.data || {};
       setCreateForm(emptyCreateForm(resource));
-      setMessage('Item created.');
+      if (resource === 'departments' && created.autoSemesters) {
+        setMessage(
+          `Department created. Auto-created ${created.autoSemesters.created || 0} semester(s); ${created.autoSemesters.existing || 0} already existed.`
+        );
+      } else {
+        setMessage('Item created.');
+      }
+      await loadFilterOptions(resource);
       await loadItems();
     } catch (err) {
       setError(err.response?.data?.message || err.message);
@@ -345,6 +366,18 @@ export default function SuperAdminAcademicPage() {
       } else if (field === 'departmentId') {
         next.semesterId = '';
         next.classNodeId = '';
+        if (value) {
+          const department = (filterOptions.departmentId || []).find((item) => idEq(itemId(item), value));
+          if (department?.programmeId) {
+            next.programmeId = String(department.programmeId);
+            const programme = (filterOptions.programmeId || []).find((item) =>
+              idEq(itemId(item), department.programmeId)
+            );
+            if (programme?.academicLevelId) {
+              next.academicLevelId = String(programme.academicLevelId);
+            }
+          }
+        }
       } else if (field === 'number') {
         const num = Number(value);
         if (num) next.name = `Semester ${num}`;
@@ -451,8 +484,9 @@ export default function SuperAdminAcademicPage() {
         ) : null}
         {resource === 'semesters' ? (
           <p className="md:col-span-3 text-sm text-ink-700/70 dark:text-sand-100/70">
-            Prefer “Ensure UG 1–8 / PG 1–4 semesters” for every department. Manual create needs Level →
-            Programme → Department → semester number.
+            Select Programme → Department → semester number. New UG/PG departments also get Semesters
+            1–8 / 1–4 automatically. If the new department is missing from the list, click Ensure UG 1–8 /
+            PG 1–4 semesters or re-open this tab.
           </p>
         ) : null}
         <label className="block text-sm md:col-span-3">
@@ -488,7 +522,7 @@ export default function SuperAdminAcademicPage() {
             'Level',
             createForm.academicLevelId,
             (val) => setCreateField('academicLevelId', val),
-            resource === 'programmes' || resource === 'subjects' || resource === 'semesters',
+            resource === 'programmes' || resource === 'subjects',
             createFieldOptions.academicLevelId
           )}
         {cfg?.createFields?.includes('parentProgrammeId') &&
@@ -506,7 +540,7 @@ export default function SuperAdminAcademicPage() {
             'Programme',
             createForm.programmeId,
             (val) => setCreateField('programmeId', val),
-            resource === 'departments' || resource === 'subjects' || resource === 'semesters',
+            resource === 'departments' || resource === 'subjects',
             createFieldOptions.programmeId
           )}
         {cfg?.createFields?.includes('departmentId') &&

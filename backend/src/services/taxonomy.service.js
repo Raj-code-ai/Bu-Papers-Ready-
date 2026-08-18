@@ -154,11 +154,11 @@ async function applySubjectParentsFromClass(payload) {
 async function ensureSemestersForDepartment(department, { academicLevelId, programmeId, count, actorId }) {
   let created = 0;
   let existing = 0;
-  const deptSlug = department.slug || slugify(department.name);
 
   for (let sem = 1; sem <= count; sem += 1) {
     const name = `Semester ${sem}`;
-    const slug = slugify(`${academicLevelId}-${programmeId}-${deptSlug}-sem-${sem}`);
+    // Include department ObjectId so unique indexes on level/programme + slug never collide.
+    const slug = slugify(`${department._id}-sem-${sem}`);
     const found = await Semester.findOne({
       departmentId: department._id,
       number: sem,
@@ -184,19 +184,43 @@ async function ensureSemestersForDepartment(department, { academicLevelId, progr
       continue;
     }
 
-    await Semester.create({
-      name,
-      slug,
-      number: sem,
-      order: sem,
-      isEnabled: true,
-      academicLevelId,
-      programmeId,
-      departmentId: department._id,
-      createdBy: actorId || null,
-      updatedBy: actorId || null,
-    });
-    created += 1;
+    try {
+      await Semester.create({
+        name,
+        slug,
+        number: sem,
+        order: sem,
+        isEnabled: true,
+        academicLevelId,
+        programmeId,
+        departmentId: department._id,
+        createdBy: actorId || null,
+        updatedBy: actorId || null,
+      });
+      created += 1;
+    } catch (err) {
+      // Another unique-slug format may already exist for this number under the department.
+      const again = await Semester.findOne({ departmentId: department._id, number: sem });
+      if (again) {
+        existing += 1;
+      } else if (err?.code === 11000) {
+        await Semester.create({
+          name,
+          slug: slugify(`${department._id}-${Date.now()}-sem-${sem}`),
+          number: sem,
+          order: sem,
+          isEnabled: true,
+          academicLevelId,
+          programmeId,
+          departmentId: department._id,
+          createdBy: actorId || null,
+          updatedBy: actorId || null,
+        });
+        created += 1;
+      } else {
+        throw err;
+      }
+    }
   }
 
   return { created, existing, expected: count };
@@ -306,6 +330,10 @@ async function createTaxonomy(actor, resource, body, context = {}) {
         'TAXONOMY_DUPLICATE'
       );
     }
+    // Slug must be unique per academic level / programme indexes — never use bare "semester-1".
+    payload.slug = slugify(`${department._id}-sem-${payload.number}`);
+    if (!payload.name) payload.name = `Semester ${payload.number}`;
+    payload.order = payload.number;
   }
 
   if (resource === 'subjects') {
@@ -327,9 +355,24 @@ async function createTaxonomy(actor, resource, body, context = {}) {
     if (payload.classNodeId) payload = await applySubjectParentsFromClass(payload);
   }
 
-  const doc = await Model.create(payload);
+  let doc;
+  try {
+    doc = await Model.create(payload);
+  } catch (err) {
+    if (err?.code === 11000) {
+      throw new AppError(
+        resource === 'semesters'
+          ? 'Could not create this semester because of a duplicate slug. Use “Ensure UG 1–8 / PG 1–4 semesters”, or pick a free semester number for this department.'
+          : 'An item with this name already exists in this scope.',
+        409,
+        'TAXONOMY_DUPLICATE'
+      );
+    }
+    throw err;
+  }
   clearPublicTaxonomyCache();
 
+  let autoSemesters = null;
   if (resource === 'departments') {
     const programme = await Programme.findById(doc.programmeId).lean();
     const level = programme
@@ -337,7 +380,7 @@ async function createTaxonomy(actor, resource, body, context = {}) {
       : null;
     const count = level?.kind === 'ug' ? 8 : level?.kind === 'pg' ? 4 : 0;
     if (count) {
-      await ensureSemestersForDepartment(doc, {
+      autoSemesters = await ensureSemestersForDepartment(doc, {
         academicLevelId: programme.academicLevelId,
         programmeId: programme._id,
         count,
@@ -357,6 +400,11 @@ async function createTaxonomy(actor, resource, body, context = {}) {
     after: payload,
     ...metaFrom(context),
   });
+
+  if (autoSemesters) {
+    const plain = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+    return { ...plain, autoSemesters };
+  }
 
   return doc;
 }
