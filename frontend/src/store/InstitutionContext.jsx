@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { publicApi } from '../services/endpoints';
+import { writeHomeCache, writeTaxonomyCache } from '../utils/publicCache';
 
 const InstitutionContext = createContext(null);
 const BRANDING_CACHE_KEY = 'arms_site_branding_v2';
@@ -79,8 +80,20 @@ export function InstitutionProvider({ children }) {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    const res = await publicApi.siteConfig();
-    const data = res.data.data;
+    const [siteRes] = await Promise.all([
+      publicApi.siteConfig(),
+      publicApi
+        .home({ latestLimit: 6, popularLimit: 6 })
+        .then((res) => {
+          const data = res.data.data;
+          if (data) {
+            writeHomeCache(data);
+            if (data.taxonomy) writeTaxonomyCache(data.taxonomy);
+          }
+        })
+        .catch(() => {}),
+    ]);
+    const data = siteRes.data.data;
     applySiteConfig(data, setBranding, setMaintenance);
     setError('');
     return data;

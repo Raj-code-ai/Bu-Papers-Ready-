@@ -18,6 +18,9 @@ const AppError = require('../utils/AppError');
 const { parsePagination, buildMeta, parseSort } = require('../utils/pagination');
 const { writeAuditLog } = require('./auditLog.service');
 const AnalyticsEvent = require('../models/AnalyticsEvent');
+const memoryCache = require('../utils/memoryCache');
+
+const PUBLIC_CACHE_TTL_MS = 45_000;
 
 function hashIp(ip) {
   if (!ip) return '';
@@ -25,8 +28,22 @@ function hashIp(ip) {
 }
 
 async function getEnabledFeatureKeys() {
+  const cached = memoryCache.get('feature-keys');
+  if (cached) return cached;
   const toggles = await FeatureToggle.find({ enabled: true }).select('key').lean();
-  return new Set(toggles.map((item) => item.key));
+  const keys = new Set(toggles.map((item) => item.key));
+  return memoryCache.set('feature-keys', keys, PUBLIC_CACHE_TTL_MS);
+}
+
+async function getAllowedResourceTypeIds() {
+  const cached = memoryCache.get('allowed-resource-types');
+  if (cached) return cached;
+  const enabledFeatures = await getEnabledFeatureKeys();
+  const resourceTypes = await ResourceType.find({ isEnabled: true }).select('_id featureKey').lean();
+  const allowedTypeIds = resourceTypes
+    .filter((type) => !type.featureKey || enabledFeatures.has(type.featureKey))
+    .map((type) => type._id);
+  return memoryCache.set('allowed-resource-types', allowedTypeIds, PUBLIC_CACHE_TTL_MS);
 }
 
 async function buildPublicPaperFilter(query) {
@@ -57,11 +74,7 @@ async function buildPublicPaperFilter(query) {
     filter.$text = { $search: String(query.q).trim() };
   }
 
-  const enabledFeatures = await getEnabledFeatureKeys();
-  const resourceTypes = await ResourceType.find({ isEnabled: true }).select('_id featureKey').lean();
-  const allowedTypeIds = resourceTypes
-    .filter((type) => !type.featureKey || enabledFeatures.has(type.featureKey))
-    .map((type) => type._id);
+  const allowedTypeIds = await getAllowedResourceTypeIds();
 
   filter.resourceTypeId = filter.resourceTypeId
     ? filter.resourceTypeId
@@ -194,6 +207,9 @@ async function recordDownload(id, context = {}) {
 }
 
 async function getStats() {
+  const cached = memoryCache.get('public-stats');
+  if (cached) return cached;
+
   const [totals] = await Paper.aggregate([
     { $match: { isDeleted: false, status: 'published' } },
     {
@@ -206,34 +222,48 @@ async function getStats() {
     },
   ]);
 
-  return {
+  const data = {
     totalPapers: totals?.totalPapers || 0,
     totalDownloads: totals?.totalDownloads || 0,
     totalViews: totals?.totalViews || 0,
   };
+  return memoryCache.set('public-stats', data, PUBLIC_CACHE_TTL_MS);
 }
 
 async function getLatest(limit = 10) {
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
-  return Paper.find({ isDeleted: false, status: 'published' })
+  const cacheKey = `public-latest:${safeLimit}`;
+  const cached = memoryCache.get(cacheKey);
+  if (cached) return cached;
+
+  const items = await Paper.find({ isDeleted: false, status: 'published' })
     .populate(publicPopulate)
     .sort({ createdAt: -1 })
     .limit(safeLimit)
     .select('-storage.raw -fileHash')
     .lean();
+  return memoryCache.set(cacheKey, items, PUBLIC_CACHE_TTL_MS);
 }
 
 async function getPopular(limit = 10) {
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
-  return Paper.find({ isDeleted: false, status: 'published' })
+  const cacheKey = `public-popular:${safeLimit}`;
+  const cached = memoryCache.get(cacheKey);
+  if (cached) return cached;
+
+  const items = await Paper.find({ isDeleted: false, status: 'published' })
     .populate(publicPopulate)
     .sort({ downloadCount: -1, viewCount: -1 })
     .limit(safeLimit)
     .select('-storage.raw -fileHash')
     .lean();
+  return memoryCache.set(cacheKey, items, PUBLIC_CACHE_TTL_MS);
 }
 
 async function getTaxonomy() {
+  const cached = memoryCache.get('public-taxonomy');
+  if (cached) return cached;
+
   const [
     levels,
     programmes,
@@ -264,7 +294,7 @@ async function getTaxonomy() {
     featureToggles.filter((item) => item.enabled).map((item) => item.key)
   );
 
-  return {
+  const data = {
     academicLevels: levels,
     programmes,
     departments,
@@ -291,6 +321,25 @@ async function getTaxonomy() {
       subjects,
     },
   };
+  return memoryCache.set('public-taxonomy', data, PUBLIC_CACHE_TTL_MS);
+}
+
+async function getHomeBundle(query = {}) {
+  const latestLimit = Math.min(Math.max(parseInt(query.latestLimit, 10) || 6, 1), 20);
+  const popularLimit = Math.min(Math.max(parseInt(query.popularLimit, 10) || 6, 1), 20);
+  const cacheKey = `public-home:${latestLimit}:${popularLimit}`;
+  const cached = memoryCache.get(cacheKey);
+  if (cached) return cached;
+
+  const [stats, latest, popular, taxonomy] = await Promise.all([
+    getStats(),
+    getLatest(latestLimit),
+    getPopular(popularLimit),
+    getTaxonomy(),
+  ]);
+
+  const data = { stats, latest, popular, taxonomy };
+  return memoryCache.set(cacheKey, data, PUBLIC_CACHE_TTL_MS);
 }
 
 module.exports = {
@@ -302,4 +351,5 @@ module.exports = {
   getLatest,
   getPopular,
   getTaxonomy,
+  getHomeBundle,
 };

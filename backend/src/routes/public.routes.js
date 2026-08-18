@@ -9,6 +9,7 @@ const {
 const router = express.Router();
 
 router.get('/site-config', publicController.getSiteConfig);
+router.get('/home', publicController.getHome);
 router.get('/stats', publicController.getStats);
 router.get('/taxonomy', publicController.getTaxonomy);
 router.get('/papers/latest', limitValidators, publicController.latestPapers);

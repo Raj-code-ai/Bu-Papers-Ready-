@@ -16,6 +16,12 @@ import {
   streamProgrammes,
   subjectsFor,
 } from '../../utils/taxonomyCascade';
+import {
+  readPapersCache,
+  readTaxonomyCache,
+  writePapersCache,
+  writeTaxonomyCache,
+} from '../../utils/publicCache';
 
 const initialFilters = {
   q: '',
@@ -50,7 +56,7 @@ export default function BrowsePage() {
     departmentId: searchParams.get('departmentId') || '',
     q: searchParams.get('q') || '',
   });
-  const [taxonomy, setTaxonomy] = useState(null);
+  const [taxonomy, setTaxonomy] = useState(() => readTaxonomyCache());
   const [papers, setPapers] = useState([]);
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -100,25 +106,61 @@ export default function BrowsePage() {
   }, [taxonomy, filters]);
 
   useEffect(() => {
-    publicApi.taxonomy().then((res) => setTaxonomy(res.data.data)).catch(() => {});
+    const cachedTaxonomy = readTaxonomyCache();
+    if (cachedTaxonomy) setTaxonomy(cachedTaxonomy);
+
+    publicApi
+      .taxonomy()
+      .then((res) => {
+        setTaxonomy(res.data.data);
+        writeTaxonomyCache(res.data.data);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setError('');
     const params = Object.fromEntries(
       Object.entries(filters).filter(([, value]) => value !== '' && value != null)
     );
-    publicApi
-      .papers({ ...params, limit: 20 })
-      .then((res) => {
-        setPapers(res.data.data || []);
-        setMeta(res.data.meta);
-      })
-      .catch((err) =>
-        setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.')
-      )
-      .finally(() => setLoading(false));
+    const requestParams = { ...params, limit: 20 };
+    const cachedPapers = readPapersCache(requestParams);
+    if (cachedPapers) {
+      setPapers(cachedPapers.items || []);
+      setMeta(cachedPapers.meta || null);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    setError('');
+
+    let cancelled = false;
+    const delayMs = filters.q ? 300 : 0;
+    const timer = setTimeout(() => {
+      publicApi
+        .papers(requestParams)
+        .then((res) => {
+          if (cancelled) return;
+          const items = res.data.data || [];
+          const metaData = res.data.meta;
+          setPapers(items);
+          setMeta(metaData);
+          writePapersCache(requestParams, { items, meta: metaData });
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          if (!cachedPapers) {
+            setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [filters]);
 
   function setFilter(key, value) {
@@ -242,8 +284,8 @@ export default function BrowsePage() {
         />
       </div>
 
-      {loading && <LoadingSkeleton rows={5} />}
-      {error && <ErrorState message={error} />}
+      {loading && papers.length === 0 && <LoadingSkeleton rows={5} />}
+      {error && papers.length === 0 && <ErrorState message={error} />}
       {!loading && !error && papers.length === 0 && (
         <EmptyState title="No matching papers" message="Try clearing filters or searching a different term." />
       )}

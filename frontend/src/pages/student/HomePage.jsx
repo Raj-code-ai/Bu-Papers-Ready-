@@ -3,29 +3,50 @@ import { Link, useNavigate } from 'react-router-dom';
 import { publicApi } from '../../services/endpoints';
 import { useInstitution } from '../../store/InstitutionContext';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../../components/common/States';
+import { readHomeCache, writeHomeCache, writeTaxonomyCache } from '../../utils/publicCache';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { branding } = useInstitution();
-  const [stats, setStats] = useState(null);
-  const [latest, setLatest] = useState([]);
-  const [popular, setPopular] = useState([]);
-  const [taxonomy, setTaxonomy] = useState(null);
+  const cached = readHomeCache();
+  const [stats, setStats] = useState(cached?.stats || null);
+  const [latest, setLatest] = useState(cached?.latest || []);
+  const [popular, setPopular] = useState(cached?.popular || []);
+  const [taxonomy, setTaxonomy] = useState(cached?.taxonomy || null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [searchQ, setSearchQ] = useState('');
 
   useEffect(() => {
-    Promise.all([publicApi.stats(), publicApi.latest(6), publicApi.popular(6), publicApi.taxonomy()])
-      .then(([statsRes, latestRes, popularRes, taxRes]) => {
-        setStats(statsRes.data.data);
-        setLatest(latestRes.data.data || []);
-        setPopular(popularRes.data.data || []);
-        setTaxonomy(taxRes.data.data);
+    let cancelled = false;
+    publicApi
+      .home({ latestLimit: 6, popularLimit: 6 })
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data.data || {};
+        setStats(data.stats || null);
+        setLatest(data.latest || []);
+        setPopular(data.popular || []);
+        setTaxonomy(data.taxonomy || null);
+        writeHomeCache(data);
+        if (data.taxonomy) writeTaxonomyCache(data.taxonomy);
+        setError('');
       })
-      .catch((err) => setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.'))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (cancelled) return;
+        if (!cached) {
+          setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const showContent = Boolean(stats || latest.length || popular.length || taxonomy);
 
   return (
     <div className="space-y-12">
@@ -81,10 +102,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {loading && <LoadingSkeleton rows={4} />}
-      {error && <ErrorState message={error} />}
+      {loading && !showContent && <LoadingSkeleton rows={4} />}
+      {error && !showContent && <ErrorState message={error} />}
 
-      {!loading && !error && (
+      {showContent ? (
         <>
           <section className="grid gap-4 sm:grid-cols-3">
             {[
@@ -153,7 +174,7 @@ export default function HomePage() {
             )}
           </section>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

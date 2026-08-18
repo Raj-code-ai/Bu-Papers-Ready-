@@ -2,6 +2,7 @@ import api from './api';
 
 export const publicApi = {
   siteConfig: () => api.get('/public/site-config'),
+  home: (params) => api.get('/public/home', { params }),
   stats: () => api.get('/public/stats'),
   taxonomy: () => api.get('/public/taxonomy'),
   latest: (limit = 8) => api.get('/public/papers/latest', { params: { limit } }),

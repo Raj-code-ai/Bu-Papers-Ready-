@@ -138,7 +138,22 @@ const getStats = asyncHandler(async (req, res) => {
 const getTaxonomy = asyncHandler(async (req, res) => {
   assertDatabaseReady();
   const data = await publicPaperService.getTaxonomy();
+  res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
   return success(res, data, 'Taxonomy fetched');
+});
+
+/**
+ * @openapi
+ * /public/home:
+ *   get:
+ *     tags: [Public]
+ *     summary: Bundled home page payload (stats, latest, popular, taxonomy)
+ */
+const getHome = asyncHandler(async (req, res) => {
+  assertDatabaseReady();
+  const data = await publicPaperService.getHomeBundle(req.query);
+  res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
+  return success(res, data, 'Home data fetched');
 });
 
 module.exports = {
@@ -151,4 +166,5 @@ module.exports = {
   downloadPaper,
   getStats,
   getTaxonomy,
+  getHome,
 };
