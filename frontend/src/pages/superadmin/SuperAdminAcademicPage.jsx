@@ -58,6 +58,11 @@ function itemId(item) {
   return item.id || item._id;
 }
 
+function idEq(a, b) {
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}
+
 function emptyCreateForm(resource) {
   const base = { name: '' };
   const cfg = RESOURCES.find((r) => r.key === resource);
@@ -68,6 +73,25 @@ function emptyCreateForm(resource) {
     else base[field] = '';
   });
   return base;
+}
+
+function optionLabel(field, opt, lookup) {
+  const bits = [opt.name];
+  if (opt.kind) bits.push(`(${opt.kind})`);
+  if (field === 'semesterId' || field === 'classNodeId') {
+    const dep = (lookup.departmentId || []).find((d) => idEq(itemId(d), opt.departmentId));
+    const prog = (lookup.programmeId || []).find((p) => idEq(itemId(p), opt.programmeId));
+    const level = (lookup.academicLevelId || []).find((l) => idEq(itemId(l), opt.academicLevelId));
+    const context = [dep?.name, prog?.name, level?.name].filter(Boolean);
+    if (context.length) bits.push(`· ${context.join(' / ')}`);
+  } else if (field === 'departmentId') {
+    const prog = (lookup.programmeId || []).find((p) => idEq(itemId(p), opt.programmeId));
+    if (prog?.name) bits.push(`· ${prog.name}`);
+  } else if (field === 'programmeId') {
+    const level = (lookup.academicLevelId || []).find((l) => idEq(itemId(l), opt.academicLevelId));
+    if (level?.name) bits.push(`· ${level.name}`);
+  }
+  return bits.join(' ');
 }
 
 export default function SuperAdminAcademicPage() {
@@ -83,6 +107,41 @@ export default function SuperAdminAcademicPage() {
   const [loading, setLoading] = useState(true);
 
   const cfg = useMemo(() => RESOURCES.find((r) => r.key === resource), [resource]);
+
+  const createFieldOptions = useMemo(() => {
+    const levelId = createForm.academicLevelId;
+    const programmeId = createForm.programmeId;
+    const departmentId = createForm.departmentId;
+
+    const levels = filterOptions.academicLevelId || [];
+    const programmes = (filterOptions.programmeId || []).filter(
+      (item) => !levelId || idEq(item.academicLevelId, levelId)
+    );
+    const departments = (filterOptions.departmentId || []).filter(
+      (item) => !programmeId || idEq(item.programmeId, programmeId)
+    );
+    const semesters = (filterOptions.semesterId || []).filter((item) => {
+      if (departmentId) return idEq(item.departmentId, departmentId);
+      if (programmeId) return idEq(item.programmeId, programmeId);
+      if (levelId) return idEq(item.academicLevelId, levelId);
+      return true;
+    });
+    const classes = (filterOptions.classNodeId || []).filter((item) => {
+      if (departmentId && item.departmentId) return idEq(item.departmentId, departmentId);
+      if (programmeId && item.programmeId) return idEq(item.programmeId, programmeId);
+      if (levelId) return idEq(item.academicLevelId, levelId);
+      return true;
+    });
+
+    return {
+      academicLevelId: levels,
+      programmeId: programmes,
+      parentProgrammeId: filterOptions.parentProgrammeId || [],
+      departmentId: departments,
+      semesterId: semesters,
+      classNodeId: classes,
+    };
+  }, [createForm, filterOptions]);
 
   const loadFilterOptions = useCallback(async (resKey) => {
     const resCfg = RESOURCES.find((r) => r.key === resKey);
@@ -136,6 +195,10 @@ export default function SuperAdminAcademicPage() {
     setMessage('');
     setError('');
     try {
+      if (resource === 'subjects' && !createForm.semesterId && !createForm.classNodeId) {
+        setError('Choose a semester (UG/PG) or a class (school) before adding a subject.');
+        return;
+      }
       const payload = { ...createForm };
       if (payload.number !== undefined && payload.number !== '') payload.number = Number(payload.number);
       if (payload.startYear !== undefined && payload.startYear !== '')
@@ -191,8 +254,46 @@ export default function SuperAdminAcademicPage() {
     }
   }
 
-  function renderSelect(field, label, value, onChange, required = false) {
-    const options = filterOptions[field] || [];
+  function setCreateField(field, value) {
+    setCreateForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === 'academicLevelId') {
+        next.programmeId = '';
+        next.departmentId = '';
+        next.semesterId = '';
+        next.classNodeId = '';
+      } else if (field === 'programmeId') {
+        next.departmentId = '';
+        next.semesterId = '';
+        next.classNodeId = '';
+      } else if (field === 'departmentId') {
+        next.semesterId = '';
+        next.classNodeId = '';
+      } else if (field === 'semesterId' && value) {
+        const semester = (filterOptions.semesterId || []).find((item) => idEq(itemId(item), value));
+        if (semester) {
+          next.academicLevelId = semester.academicLevelId ? String(semester.academicLevelId) : next.academicLevelId;
+          next.programmeId = semester.programmeId ? String(semester.programmeId) : next.programmeId;
+          next.departmentId = semester.departmentId ? String(semester.departmentId) : next.departmentId;
+          next.classNodeId = '';
+        }
+      } else if (field === 'classNodeId' && value) {
+        const classNode = (filterOptions.classNodeId || []).find((item) => idEq(itemId(item), value));
+        if (classNode) {
+          next.academicLevelId = classNode.academicLevelId
+            ? String(classNode.academicLevelId)
+            : next.academicLevelId;
+          next.programmeId = classNode.programmeId ? String(classNode.programmeId) : next.programmeId;
+          next.departmentId = classNode.departmentId ? String(classNode.departmentId) : next.departmentId;
+          next.semesterId = '';
+        }
+      }
+      return next;
+    });
+  }
+
+  function renderSelect(field, label, value, onChange, required = false, optionsOverride) {
+    const options = optionsOverride || filterOptions[field] || [];
     return (
       <label key={field} className="block text-sm">
         {label}
@@ -205,8 +306,7 @@ export default function SuperAdminAcademicPage() {
           <option value="">— Select —</option>
           {options.map((opt) => (
             <option key={itemId(opt)} value={itemId(opt)}>
-              {opt.name}
-              {opt.kind ? ` (${opt.kind})` : ''}
+              {optionLabel(field, opt, filterOptions)}
             </option>
           ))}
         </select>
@@ -257,6 +357,12 @@ export default function SuperAdminAcademicPage() {
       )}
 
       <form onSubmit={onCreate} className="panel grid gap-3 md:grid-cols-3">
+        {resource === 'subjects' ? (
+          <p className="md:col-span-3 text-sm text-ink-700/70 dark:text-sand-100/70">
+            For UG/PG subjects: choose Level → Programme → Department → Semester, then add the subject.
+            Semester labels include the department name so you pick the correct “Semester 2”.
+          </p>
+        ) : null}
         <label className="block text-sm md:col-span-3">
           Name
           <input
@@ -288,28 +394,54 @@ export default function SuperAdminAcademicPage() {
             'academicLevelId',
             'Level',
             createForm.academicLevelId,
-            (val) => setCreateForm((f) => ({ ...f, academicLevelId: val })),
-            resource === 'programmes'
+            (val) => setCreateField('academicLevelId', val),
+            resource === 'programmes' || resource === 'subjects',
+            createFieldOptions.academicLevelId
           )}
         {cfg?.createFields?.includes('parentProgrammeId') &&
-          renderSelect('parentProgrammeId', 'Parent programme (optional)', createForm.parentProgrammeId, (val) =>
-            setCreateForm((f) => ({ ...f, parentProgrammeId: val }))
+          renderSelect(
+            'parentProgrammeId',
+            'Parent programme (optional)',
+            createForm.parentProgrammeId,
+            (val) => setCreateForm((f) => ({ ...f, parentProgrammeId: val })),
+            false,
+            createFieldOptions.parentProgrammeId
           )}
         {cfg?.createFields?.includes('programmeId') &&
-          renderSelect('programmeId', 'Programme', createForm.programmeId, (val) =>
-            setCreateForm((f) => ({ ...f, programmeId: val }))
-          , resource === 'departments')}
+          renderSelect(
+            'programmeId',
+            'Programme',
+            createForm.programmeId,
+            (val) => setCreateField('programmeId', val),
+            resource === 'departments' || resource === 'subjects',
+            createFieldOptions.programmeId
+          )}
         {cfg?.createFields?.includes('departmentId') &&
-          renderSelect('departmentId', 'Department', createForm.departmentId, (val) =>
-            setCreateForm((f) => ({ ...f, departmentId: val }))
+          renderSelect(
+            'departmentId',
+            'Department',
+            createForm.departmentId,
+            (val) => setCreateField('departmentId', val),
+            resource === 'subjects',
+            createFieldOptions.departmentId
           )}
         {cfg?.createFields?.includes('semesterId') &&
-          renderSelect('semesterId', 'Semester', createForm.semesterId, (val) =>
-            setCreateForm((f) => ({ ...f, semesterId: val }))
+          renderSelect(
+            'semesterId',
+            'Semester (UG/PG)',
+            createForm.semesterId,
+            (val) => setCreateField('semesterId', val),
+            false,
+            createFieldOptions.semesterId
           )}
         {cfg?.createFields?.includes('classNodeId') &&
-          renderSelect('classNodeId', 'Class', createForm.classNodeId, (val) =>
-            setCreateForm((f) => ({ ...f, classNodeId: val }))
+          renderSelect(
+            'classNodeId',
+            'Class (school only)',
+            createForm.classNodeId,
+            (val) => setCreateField('classNodeId', val),
+            false,
+            createFieldOptions.classNodeId
           )}
         {cfg?.createFields?.includes('number') && (
           <label className="block text-sm">

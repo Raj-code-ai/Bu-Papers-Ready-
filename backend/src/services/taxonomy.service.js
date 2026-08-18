@@ -2,6 +2,7 @@ const AppError = require('../utils/AppError');
 const { slugify } = require('../utils/slugify');
 const { parsePagination, buildMeta } = require('../utils/pagination');
 const { writeAuditLog } = require('./auditLog.service');
+const memoryCache = require('../utils/memoryCache');
 const {
   AcademicLevel,
   Programme,
@@ -111,10 +112,46 @@ async function listTaxonomy(resource, query) {
   return { items, meta: buildMeta({ page, limit, total }) };
 }
 
+function clearPublicTaxonomyCache() {
+  memoryCache.clear();
+}
+
+async function applySubjectParentsFromSemester(payload) {
+  if (!payload.semesterId) return payload;
+  const semester = await Semester.findById(payload.semesterId).lean();
+  if (!semester) {
+    throw new AppError('Selected semester was not found', 400, 'VALIDATION_ERROR');
+  }
+  // Semester owns the parent chain — keep subject aligned so upload filters work.
+  payload.academicLevelId = semester.academicLevelId || payload.academicLevelId || null;
+  payload.programmeId = semester.programmeId || payload.programmeId || null;
+  payload.departmentId = semester.departmentId || payload.departmentId || null;
+  payload.classNodeId = null;
+  return payload;
+}
+
 async function createTaxonomy(actor, resource, body, context = {}) {
   const Model = getModel(resource);
-  const payload = buildCreatePayload(resource, body, actor._id);
+  let payload = buildCreatePayload(resource, body, actor._id);
+  if (resource === 'subjects') {
+    if (payload.semesterId && payload.classNodeId) {
+      throw new AppError(
+        'Subject must use either a semester (UG/PG) or a class (school), not both.',
+        400,
+        'VALIDATION_ERROR'
+      );
+    }
+    if (!payload.semesterId && !payload.classNodeId) {
+      throw new AppError(
+        'Subject requires a semester (for UG/PG) or a class (for school).',
+        400,
+        'VALIDATION_ERROR'
+      );
+    }
+    payload = await applySubjectParentsFromSemester(payload);
+  }
   const doc = await Model.create(payload);
+  clearPublicTaxonomyCache();
 
   await writeAuditLog({
     action: `SUPERADMIN_CREATE_${resource.toUpperCase()}`,
@@ -160,7 +197,18 @@ async function updateTaxonomy(actor, resource, id, body, context = {}) {
   if (body.classNodeId !== undefined) doc.classNodeId = body.classNodeId || null;
   doc.updatedBy = actor._id;
 
+  if (resource === 'subjects' && doc.semesterId) {
+    const semester = await Semester.findById(doc.semesterId).lean();
+    if (semester) {
+      doc.academicLevelId = semester.academicLevelId || null;
+      doc.programmeId = semester.programmeId || null;
+      doc.departmentId = semester.departmentId || null;
+      doc.classNodeId = null;
+    }
+  }
+
   await doc.save();
+  clearPublicTaxonomyCache();
 
   await writeAuditLog({
     action: `SUPERADMIN_UPDATE_${resource.toUpperCase()}`,
@@ -207,6 +255,7 @@ async function deleteTaxonomy(actor, resource, id, context = {}) {
   }
 
   await Model.deleteOne({ _id: id });
+  clearPublicTaxonomyCache();
 
   await writeAuditLog({
     action: `SUPERADMIN_DELETE_${resource.toUpperCase()}`,

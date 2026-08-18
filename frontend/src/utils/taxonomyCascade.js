@@ -66,6 +66,12 @@ export function subjectsFor(taxonomy, ctx) {
   const { academicLevelId, programmeId, departmentId, semesterId, classNodeId } = ctx;
 
   return (taxonomy?.subjects || []).filter((item) => {
+    // Semester / class already imply the parent chain — match those first.
+    // Extra parent IDs on a subject are often incomplete or mismatched from
+    // Super Admin create forms, so do not use them to hide the subject.
+    if (semesterId) return idEq(item.semesterId, semesterId);
+    if (classNodeId) return idEq(item.classNodeId, classNodeId);
+
     if (academicLevelId && item.academicLevelId && !idEq(item.academicLevelId, academicLevelId)) {
       return false;
     }
@@ -75,8 +81,6 @@ export function subjectsFor(taxonomy, ctx) {
     if (departmentId && item.departmentId && !idEq(item.departmentId, departmentId)) {
       return false;
     }
-    if (semesterId) return idEq(item.semesterId, semesterId);
-    if (classNodeId) return idEq(item.classNodeId, classNodeId);
     return false;
   });
 }
