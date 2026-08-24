@@ -5,8 +5,14 @@ Repo: https://github.com/Raj-code-ai/Bu-Papers-Ready_
 ## 1. MongoDB Atlas
 
 1. Create free cluster + DB user.
-2. Network Access → **Allow Access from Anywhere** (`0.0.0.0/0`) so Render can connect.
-3. Copy connection string → use as `MONGODB_URI` (database name `arms`).
+2. **Network Access** → **Add IP Address** → **Allow Access from Anywhere** (`0.0.0.0/0`).
+
+   Render uses **changing outbound IPs**. Whitelisting only your home/office IP causes:
+
+   `Could not connect to any servers in your MongoDB Atlas cluster... IP that isn't whitelisted`
+
+   After updating Network Access, **Restart** (or redeploy) the Render API service.
+3. Copy connection string → use as `MONGODB_URI` on Render (database name `arms`).
 
 ## 2. Render (backend)
 

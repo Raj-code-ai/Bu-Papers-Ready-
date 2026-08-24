@@ -3,19 +3,11 @@ const env = require('./env');
 const logger = require('./logger');
 
 let isConnected = false;
+let listenersAttached = false;
 
-async function connectDatabase() {
-  if (!env.mongodbUri) {
-    logger.warn('MONGODB_URI is not set. Database connection skipped.');
-    return null;
-  }
-
-  if (isConnected && mongoose.connection.readyState === 1) {
-    return mongoose.connection;
-  }
-
-  mongoose.set('strictQuery', true);
-  mongoose.set('bufferTimeoutMS', 5000);
+function attachConnectionListeners() {
+  if (listenersAttached) return;
+  listenersAttached = true;
 
   mongoose.connection.on('connected', () => {
     isConnected = true;
@@ -32,14 +24,57 @@ async function connectDatabase() {
     logger.warn('MongoDB disconnected');
   });
 
+  mongoose.connection.on('reconnected', () => {
+    isConnected = true;
+    logger.info('MongoDB reconnected', { db: env.mongodbDbName });
+  });
+}
+
+async function connectDatabaseOnce() {
+  if (!env.mongodbUri) {
+    logger.warn('MONGODB_URI is not set. Database connection skipped.');
+    return null;
+  }
+
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  mongoose.set('strictQuery', true);
+  mongoose.set('bufferTimeoutMS', 5000);
+  attachConnectionListeners();
+
   await mongoose.connect(env.mongodbUri, {
     dbName: env.mongodbDbName,
     maxPoolSize: 20,
-    serverSelectionTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 15000,
   });
 
   isConnected = mongoose.connection.readyState === 1;
   return mongoose.connection;
+}
+
+/**
+ * Connect with retries — helps when Atlas briefly rejects or Render IP rotates.
+ */
+async function connectDatabase({ retries = 5, delayMs = 3000 } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return await connectDatabaseOnce();
+    } catch (error) {
+      lastError = error;
+      logger.error('MongoDB connect attempt failed', {
+        attempt,
+        retries,
+        error: error.message,
+      });
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function disconnectDatabase() {

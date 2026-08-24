@@ -30,6 +30,8 @@ async function startServer() {
   } catch (error) {
     logger.error('Failed to connect to MongoDB during bootstrap', {
       error: error.message,
+      hint:
+        'Open MongoDB Atlas → Network Access → Add IP Address → Allow Access from Anywhere (0.0.0.0/0). Render uses changing IPs, so a single office IP is not enough.',
     });
     process.exit(1);
   }
