@@ -33,6 +33,7 @@ const listPapersValidators = [
   query('subjectId').optional().isMongoId(),
   query('academicYearId').optional().isMongoId(),
   query('resourceTypeId').optional().isMongoId(),
+  query('paperTypeId').optional().isMongoId(),
   validate,
 ];
 

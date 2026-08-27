@@ -10,11 +10,14 @@ import {
   departmentsForProgramme,
   getAcademicLevel,
   hasStreamProgrammes,
-  isHigherEd,
+  hydrateBrowseFilters,
   isSchoolBand,
+  itemId,
   semestersFor,
   streamProgrammes,
   subjectsFor,
+  taxonomyOptionLabel,
+  usesProgrammeCascade,
 } from '../../utils/taxonomyCascade';
 import {
   readPapersCache,
@@ -36,26 +39,37 @@ const initialFilters = {
   page: 1,
 };
 
-function FilterSelect({ label, value, onChange, options, placeholder }) {
+function FilterSelect({ label, value, onChange, options, placeholder, taxonomy, withContext }) {
   return (
-    <select className="input" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+    <select className="input" value={value || ''} onChange={(e) => onChange(e.target.value)} aria-label={label}>
       <option value="">{placeholder || `All ${label.toLowerCase()}s`}</option>
-      {options.map((item) => (
-        <option key={item._id} value={item._id}>
-          {item.name}
-        </option>
-      ))}
+      {(options || []).map((item) => {
+        const id = itemId(item);
+        return (
+          <option key={id} value={id}>
+            {taxonomyOptionLabel(item, { withContext, taxonomy })}
+          </option>
+        );
+      })}
     </select>
   );
 }
 
 export default function BrowsePage() {
   const [searchParams] = useSearchParams();
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState(() => ({
     ...initialFilters,
+    academicLevelId: searchParams.get('academicLevelId') || '',
+    programmeId: searchParams.get('programmeId') || '',
     departmentId: searchParams.get('departmentId') || '',
+    semesterId: searchParams.get('semesterId') || '',
+    classNodeId: searchParams.get('classNodeId') || '',
+    subjectId: searchParams.get('subjectId') || '',
+    paperTypeId: searchParams.get('paperTypeId') || '',
+    resourceTypeId: searchParams.get('resourceTypeId') || '',
     q: searchParams.get('q') || '',
-  });
+  }));
+  const [searchDraft, setSearchDraft] = useState(() => searchParams.get('q') || '');
   const [taxonomy, setTaxonomy] = useState(() => readTaxonomyCache());
   const [papers, setPapers] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -80,43 +94,75 @@ export default function BrowsePage() {
       };
     }
 
-    const streams = streamProgrammes(taxonomy, levelId);
-    const programmes = backgroundProgrammes(taxonomy, levelId);
-    const departments = filters.programmeId
-      ? departmentsForProgramme(taxonomy, filters.programmeId)
-      : [];
-    const semesters = semestersFor(taxonomy, {
-      academicLevelId: levelId,
-      programmeId: filters.programmeId,
-      departmentId: filters.departmentId,
-    });
-    const classes = classesFor(taxonomy, {
-      academicLevelId: levelId,
-      programmeId: filters.programmeId,
-    });
-    const subjects = subjectsFor(taxonomy, {
-      academicLevelId: levelId,
-      programmeId: filters.programmeId,
-      departmentId: filters.departmentId,
-      semesterId: filters.semesterId,
-      classNodeId: filters.classNodeId,
-    });
-
-    return { streams, programmes, departments, semesters, classes, subjects };
+    return {
+      streams: streamProgrammes(taxonomy, levelId),
+      programmes: backgroundProgrammes(taxonomy, levelId),
+      departments: filters.programmeId
+        ? departmentsForProgramme(taxonomy, filters.programmeId)
+        : [],
+      semesters: semestersFor(taxonomy, {
+        academicLevelId: levelId,
+        programmeId: filters.programmeId,
+        departmentId: filters.departmentId,
+      }),
+      classes: classesFor(taxonomy, {
+        academicLevelId: levelId,
+        programmeId: filters.programmeId,
+      }),
+      subjects: subjectsFor(taxonomy, {
+        academicLevelId: levelId,
+        programmeId: filters.programmeId,
+        departmentId: filters.departmentId,
+        semesterId: filters.semesterId,
+        classNodeId: filters.classNodeId,
+      }),
+    };
   }, [taxonomy, filters]);
 
   useEffect(() => {
-    const cachedTaxonomy = readTaxonomyCache();
-    if (cachedTaxonomy) setTaxonomy(cachedTaxonomy);
-
+    let cancelled = false;
     publicApi
       .taxonomy()
       .then((res) => {
-        setTaxonomy(res.data.data);
-        writeTaxonomyCache(res.data.data);
+        if (cancelled) return;
+        const data = res.data.data;
+        setTaxonomy(data);
+        writeTaxonomyCache(data);
+        setFilters((current) => hydrateBrowseFilters(data, current));
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!taxonomy) return;
+    setFilters((current) => {
+      const hydrated = hydrateBrowseFilters(taxonomy, current);
+      if (
+        hydrated.academicLevelId === current.academicLevelId &&
+        hydrated.programmeId === current.programmeId &&
+        hydrated.departmentId === current.departmentId &&
+        hydrated.semesterId === current.semesterId &&
+        hydrated.classNodeId === current.classNodeId
+      ) {
+        return current;
+      }
+      return hydrated;
+    });
+  }, [taxonomy]);
+
+  // Debounce search text into the real filter used by the API.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters((current) => {
+        if (current.q === searchDraft) return current;
+        return { ...current, q: searchDraft, page: 1 };
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
 
   useEffect(() => {
     const params = Object.fromEntries(
@@ -134,32 +180,28 @@ export default function BrowsePage() {
     setError('');
 
     let cancelled = false;
-    const delayMs = filters.q ? 300 : 0;
-    const timer = setTimeout(() => {
-      publicApi
-        .papers(requestParams)
-        .then((res) => {
-          if (cancelled) return;
-          const items = res.data.data || [];
-          const metaData = res.data.meta;
-          setPapers(items);
-          setMeta(metaData);
-          writePapersCache(requestParams, { items, meta: metaData });
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          if (!cachedPapers) {
-            setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.');
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, delayMs);
+    publicApi
+      .papers(requestParams)
+      .then((res) => {
+        if (cancelled) return;
+        const items = res.data.data || [];
+        const metaData = res.data.meta;
+        setPapers(items);
+        setMeta(metaData);
+        writePapersCache(requestParams, { items, meta: metaData });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (!cachedPapers) {
+          setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [filters]);
 
@@ -170,6 +212,11 @@ export default function BrowsePage() {
     });
   }
 
+  function clearFilters() {
+    setSearchDraft('');
+    setFilters({ ...initialFilters });
+  }
+
   const showStreams =
     selectedLevel &&
     isSchoolBand(selectedLevel) &&
@@ -178,25 +225,36 @@ export default function BrowsePage() {
     selectedLevel &&
     isSchoolBand(selectedLevel) &&
     (!showStreams || filters.programmeId);
-  const showProgrammes = selectedLevel && isHigherEd(selectedLevel);
-  const showDepartments = showProgrammes && filters.programmeId;
-  const showSemesters = showDepartments && filters.departmentId;
-  const showSchoolSubjects = showClasses && filters.classNodeId;
-  const showHigherEdSubjects = showSemesters && filters.semesterId;
+  const showProgrammes = selectedLevel && usesProgrammeCascade(selectedLevel);
+  const showDepartments = showProgrammes && Boolean(filters.programmeId);
+  const showSemesters = showDepartments && Boolean(filters.departmentId);
+  const showSchoolSubjects = showClasses && Boolean(filters.classNodeId);
+  const showHigherEdSubjects = showSemesters && Boolean(filters.semesterId);
   const showSubjects = showSchoolSubjects || showHigherEdSubjects;
+  const hasActiveFilters = Object.entries(filters).some(
+    ([key, value]) => key !== 'page' && value !== '' && value != null
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-semibold">Question papers</h1>
-        <p className="mt-2 text-ink-700/70 dark:text-sand-100/70">{browseHelperText(selectedLevel)}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold">Question papers</h1>
+          <p className="mt-2 text-ink-700/70 dark:text-sand-100/70">{browseHelperText(selectedLevel)}</p>
+        </div>
+        {hasActiveFilters ? (
+          <button type="button" className="btn-secondary !py-1.5" onClick={clearFilters}>
+            Clear filters
+          </button>
+        ) : null}
       </div>
 
       <div className="panel grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <input
           className="input lg:col-span-3"
           placeholder="Search papers..."
-          value={filters.q}
-          onChange={(e) => setFilter('q', e.target.value)}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
           aria-label="Search question papers"
         />
 
@@ -245,6 +303,8 @@ export default function BrowsePage() {
             onChange={(value) => setFilter('semesterId', value)}
             options={cascadeOptions.semesters}
             placeholder="All semesters"
+            taxonomy={taxonomy}
+            withContext={false}
           />
         ) : null}
 
@@ -299,8 +359,8 @@ export default function BrowsePage() {
                 <p className="mt-1 text-sm text-ink-700/70 dark:text-sand-100/70">
                   {[
                     paper.academicLevelId?.name,
-                    paper.departmentId?.name,
                     paper.programmeId?.name,
+                    paper.departmentId?.name,
                     paper.semesterId?.name || paper.classNodeId?.name,
                     paper.subjectId?.name,
                     paper.paperTypeId?.name || paper.resourceTypeId?.name,
@@ -315,7 +375,7 @@ export default function BrowsePage() {
         ))}
       </div>
 
-      {meta && (
+      {meta && meta.total > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <p className="text-ink-700/70 dark:text-sand-100/70">
             Showing {(meta.page - 1) * meta.limit + 1}–{Math.min(meta.page * meta.limit, meta.total)} of {meta.total}{' '}

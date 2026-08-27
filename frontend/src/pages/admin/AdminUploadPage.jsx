@@ -10,12 +10,12 @@ import {
   departmentsForProgramme,
   getAcademicLevel,
   hasStreamProgrammes,
-  isHigherEd,
   isSchoolBand,
   schoolUploadRequiresStream,
   semestersFor,
   streamProgrammes,
   subjectsFor,
+  usesProgrammeCascade,
 } from '../../utils/taxonomyCascade';
 
 const initialForm = {
@@ -106,7 +106,7 @@ export default function AdminUploadPage() {
     selectedLevel &&
     isSchoolBand(selectedLevel) &&
     (!showStreams || form.programmeId);
-  const showProgrammes = selectedLevel && isHigherEd(selectedLevel);
+  const showProgrammes = selectedLevel && usesProgrammeCascade(selectedLevel);
   const showDepartments = showProgrammes && form.programmeId;
   const showSemesters = showDepartments && form.departmentId;
   const showSchoolSubjects = showClasses && form.classNodeId;
@@ -143,15 +143,15 @@ export default function AdminUploadPage() {
       return '';
     }
 
-    if (isHigherEd(selectedLevel)) {
+    if (usesProgrammeCascade(selectedLevel)) {
       if (!form.programmeId) {
-        return 'Programme is required for UG/PG.';
+        return 'Programme is required for this academic level.';
       }
       if (!form.departmentId) {
-        return 'Department is required for UG/PG.';
+        return 'Department is required for this academic level.';
       }
       if (!form.semesterId) {
-        return 'Semester is required for UG/PG.';
+        return 'Semester is required for this academic level.';
       }
       return '';
     }

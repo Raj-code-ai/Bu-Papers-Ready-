@@ -76,15 +76,15 @@ async function buildPublicPaperFilter(query) {
 
   const allowedTypeIds = await getAllowedResourceTypeIds();
 
-  filter.resourceTypeId = filter.resourceTypeId
-    ? filter.resourceTypeId
-    : { $in: allowedTypeIds };
-
-  if (filter.resourceTypeId && !filter.resourceTypeId.$in) {
-    const stillAllowed = allowedTypeIds.some((id) => String(id) === String(filter.resourceTypeId));
+  if (filter.resourceTypeId) {
+    const stillAllowed =
+      !allowedTypeIds.length ||
+      allowedTypeIds.some((id) => String(id) === String(filter.resourceTypeId));
     if (!stillAllowed) {
       throw new AppError('Requested resource type is disabled', 404, 'NOT_FOUND');
     }
+  } else if (allowedTypeIds.length) {
+    filter.resourceTypeId = { $in: allowedTypeIds };
   }
 
   return filter;

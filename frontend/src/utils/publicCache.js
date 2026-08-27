@@ -1,6 +1,7 @@
 const HOME_CACHE_KEY = 'arms_public_home_v1';
-const TAXONOMY_CACHE_KEY = 'arms_public_taxonomy_v1';
-const PAPERS_CACHE_PREFIX = 'arms_public_papers_v1:';
+const TAXONOMY_CACHE_KEY = 'arms_public_taxonomy_v2';
+const PAPERS_CACHE_PREFIX = 'arms_public_papers_v2:';
+const PAPERS_CACHE_TTL_MS = 90_000;
 
 function readJson(key) {
   try {
@@ -47,9 +48,14 @@ export function papersCacheKey(params) {
 }
 
 export function readPapersCache(params) {
-  return readJson(papersCacheKey(params));
+  const wrapped = readJson(papersCacheKey(params));
+  if (!wrapped) return null;
+  if (wrapped.savedAt && Date.now() - wrapped.savedAt > PAPERS_CACHE_TTL_MS) {
+    return null;
+  }
+  return wrapped.data || wrapped;
 }
 
 export function writePapersCache(params, data) {
-  writeJson(papersCacheKey(params), data);
+  writeJson(papersCacheKey(params), { savedAt: Date.now(), data });
 }
