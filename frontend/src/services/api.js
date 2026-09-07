@@ -10,8 +10,27 @@ function resolveApiBaseUrl() {
 const api = axios.create({
   baseURL: resolveApiBaseUrl(),
   withCredentials: true,
-  timeout: 60000,
+  timeout: 25000,
 });
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryGet(error, config) {
+  if (!config || String(config.method || 'get').toLowerCase() !== 'get') return false;
+  if (error.code === 'ERR_CANCELED') return false;
+  if (config.__retryCount >= 2) return false;
+  const status = error.response?.status;
+  return (
+    !error.response ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    error.code === 'ECONNABORTED' ||
+    error.code === 'ERR_NETWORK'
+  );
+}
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('arms_access_token');
@@ -37,6 +56,13 @@ api.interceptors.response.use(
     const original = error.config || {};
     const status = error.response?.status;
     const code = error.response?.data?.code;
+
+    if (shouldRetryGet(error, original)) {
+      original.__retryCount = (original.__retryCount || 0) + 1;
+      original.timeout = 45000;
+      await sleep(1200 * original.__retryCount);
+      return api(original);
+    }
 
     // Never try token refresh on credential/auth bootstrap endpoints.
     // Also do not treat 2FA challenge responses as session-expiry.

@@ -47,6 +47,7 @@ const getSiteConfig = asyncHandler(async (req, res) => {
 const listPapers = asyncHandler(async (req, res) => {
   assertDatabaseReady();
   const data = await publicPaperService.listPapers(req.query);
+  res.set('Cache-Control', 'public, max-age=20, stale-while-revalidate=60');
   return success(res, data.items, 'Papers fetched', 200, data.meta);
 });
 

@@ -126,6 +126,9 @@ paperSchema.index({ viewCount: -1 });
 paperSchema.index({ downloadCount: -1 });
 paperSchema.index({ title: 'text', description: 'text', originalFileName: 'text', tags: 'text' });
 paperSchema.index({ academicLevelId: 1, departmentId: 1, isDeleted: 1, status: 1 });
+paperSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
+paperSchema.index({ isDeleted: 1, status: 1, semesterId: 1, createdAt: -1 });
+paperSchema.index({ isDeleted: 1, status: 1, departmentId: 1, createdAt: -1 });
 
 paperSchema.pre('validate', function ensureHierarchy(next) {
   if (!this.semesterId && !this.classNodeId) {

@@ -55,9 +55,8 @@ function FilterSelect({ label, value, onChange, options, placeholder, taxonomy, 
   );
 }
 
-export default function BrowsePage() {
-  const [searchParams] = useSearchParams();
-  const [filters, setFilters] = useState(() => ({
+function filtersFromSearchParams(searchParams, taxonomy) {
+  return hydrateBrowseFilters(taxonomy, {
     ...initialFilters,
     academicLevelId: searchParams.get('academicLevelId') || '',
     programmeId: searchParams.get('programmeId') || '',
@@ -68,12 +67,25 @@ export default function BrowsePage() {
     paperTypeId: searchParams.get('paperTypeId') || '',
     resourceTypeId: searchParams.get('resourceTypeId') || '',
     q: searchParams.get('q') || '',
-  }));
+  });
+}
+
+function toPaperParams(filters) {
+  return {
+    ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '' && value != null)),
+    limit: 20,
+  };
+}
+
+export default function BrowsePage() {
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState(() => filtersFromSearchParams(searchParams, readTaxonomyCache()));
   const [searchDraft, setSearchDraft] = useState(() => searchParams.get('q') || '');
   const [taxonomy, setTaxonomy] = useState(() => readTaxonomyCache());
-  const [papers, setPapers] = useState([]);
-  const [meta, setMeta] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [papers, setPapers] = useState(() => readPapersCache(toPaperParams(filtersFromSearchParams(searchParams, readTaxonomyCache())))?.items || []);
+  const [meta, setMeta] = useState(() => readPapersCache(toPaperParams(filtersFromSearchParams(searchParams, readTaxonomyCache())))?.meta || null);
+  const [loading, setLoading] = useState(() => !readPapersCache(toPaperParams(filtersFromSearchParams(searchParams, readTaxonomyCache()))));
   const [error, setError] = useState('');
 
   const selectedLevel = useMemo(
@@ -165,11 +177,8 @@ export default function BrowsePage() {
   }, [searchDraft]);
 
   useEffect(() => {
-    const params = Object.fromEntries(
-      Object.entries(filters).filter(([, value]) => value !== '' && value != null)
-    );
-    const requestParams = { ...params, limit: 20 };
-    const cachedPapers = readPapersCache(requestParams);
+    const params = toPaperParams(filters);
+    const cachedPapers = readPapersCache(params);
     if (cachedPapers) {
       setPapers(cachedPapers.items || []);
       setMeta(cachedPapers.meta || null);
@@ -181,19 +190,24 @@ export default function BrowsePage() {
 
     let cancelled = false;
     publicApi
-      .papers(requestParams)
+      .papers(params)
       .then((res) => {
         if (cancelled) return;
         const items = res.data.data || [];
         const metaData = res.data.meta;
         setPapers(items);
         setMeta(metaData);
-        writePapersCache(requestParams, { items, meta: metaData });
+        writePapersCache(params, { items, meta: metaData });
       })
       .catch((err) => {
         if (cancelled) return;
         if (!cachedPapers) {
-          setError(err.response?.data?.message || 'Unable to load question papers right now. Please try again.');
+          const timedOut = err.code === 'ECONNABORTED' || !err.response;
+          setError(
+            timedOut
+              ? 'The server is waking up or busy. Tap Retry in a few seconds.'
+              : err.response?.data?.message || 'Unable to load question papers right now. Please try again.'
+          );
         }
       })
       .finally(() => {
@@ -203,7 +217,7 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, reloadToken]);
 
   function setFilter(key, value) {
     setFilters((current) => {
@@ -345,7 +359,9 @@ export default function BrowsePage() {
       </div>
 
       {loading && papers.length === 0 && <LoadingSkeleton rows={5} />}
-      {error && papers.length === 0 && <ErrorState message={error} />}
+      {error && papers.length === 0 && (
+        <ErrorState message={error} onRetry={() => setReloadToken((n) => n + 1)} />
+      )}
       {!loading && !error && papers.length === 0 && (
         <EmptyState title="No matching papers" message="Try clearing filters or searching a different term." />
       )}

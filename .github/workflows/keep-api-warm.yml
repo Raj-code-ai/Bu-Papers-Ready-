@@ -16,5 +16,6 @@ jobs:
         run: |
           set -e
           curl -fsS --max-time 90 "https://bu-papers-ready.onrender.com/api/v1/health" || true
-          curl -fsS --max-time 90 "https://bu-papers-ready.onrender.com/api/v1/public/home?latestLimit=1&popularLimit=1" >/dev/null
+          curl -fsS --max-time 90 "https://bu-papers-ready.onrender.com/api/v1/public/home?latestLimit=1&popularLimit=1" >/dev/null || true
+          curl -fsS --max-time 90 "https://bu-papers-ready.onrender.com/api/v1/public/papers?limit=5" >/dev/null
           echo "API warm ping ok"

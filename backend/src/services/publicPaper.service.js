@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const paperRepository = require('../repositories/paper.repository');
+const mongoose = require('mongoose');
 const {
   AcademicLevel,
   Programme,
@@ -21,6 +21,23 @@ const AnalyticsEvent = require('../models/AnalyticsEvent');
 const memoryCache = require('../utils/memoryCache');
 
 const PUBLIC_CACHE_TTL_MS = 45_000;
+const LIST_CACHE_TTL_MS = 30_000;
+const TAXONOMY_SELECT =
+  'name slug kind order academicLevelId programmeId parentProgrammeId departmentId semesterId classNodeId number code featureKey';
+const LIST_SELECT =
+  'title downloadCount viewCount academicLevelId programmeId departmentId semesterId classNodeId subjectId resourceTypeId paperTypeId createdAt';
+
+function asObjectId(value) {
+  if (!value) return null;
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  const raw = String(value);
+  if (!mongoose.isValidObjectId(raw)) return null;
+  return new mongoose.Types.ObjectId(raw);
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function hashIp(ip) {
   if (!ip) return '';
@@ -66,12 +83,19 @@ async function buildPublicPaperFilter(query) {
 
   for (const field of objectFields) {
     if (query[field]) {
-      filter[field] = query[field];
+      const id = asObjectId(query[field]);
+      if (id) filter[field] = id;
     }
   }
 
-  if (query.q) {
-    filter.$text = { $search: String(query.q).trim() };
+  const q = String(query.q || '').trim();
+  if (q) {
+    filter.$or = [
+      { title: { $regex: escapeRegex(q), $options: 'i' } },
+      { description: { $regex: escapeRegex(q), $options: 'i' } },
+      { originalFileName: { $regex: escapeRegex(q), $options: 'i' } },
+      { tags: { $regex: escapeRegex(q), $options: 'i' } },
+    ];
   }
 
   const allowedTypeIds = await getAllowedResourceTypeIds();
@@ -107,23 +131,47 @@ async function listPapers(query) {
   const sort = parseSort(query, ['createdAt', 'viewCount', 'downloadCount', 'title'], {
     createdAt: -1,
   });
+  const cacheKey = `public-papers:${JSON.stringify({
+    page,
+    limit,
+    sort,
+    q: String(query.q || '').trim(),
+    academicLevelId: query.academicLevelId || '',
+    programmeId: query.programmeId || '',
+    departmentId: query.departmentId || '',
+    semesterId: query.semesterId || '',
+    classNodeId: query.classNodeId || '',
+    subjectId: query.subjectId || '',
+    academicYearId: query.academicYearId || '',
+    resourceTypeId: query.resourceTypeId || '',
+    paperTypeId: query.paperTypeId || '',
+  })}`;
+  const cached = memoryCache.get(cacheKey);
+  if (cached) return cached;
+
   const filter = await buildPublicPaperFilter(query);
 
-  const [items, total] = await Promise.all([
-    Paper.find(filter)
-      .populate(publicPopulate)
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .select('-storage.raw -fileHash')
-      .lean(),
-    Paper.countDocuments(filter),
-  ]);
+  const items = await Paper.find(filter)
+    .populate(publicPopulate)
+    .sort(sort)
+    .skip(skip)
+    .limit(limit)
+    .select(LIST_SELECT)
+    .maxTimeMS(12000)
+    .lean();
 
-  return {
+  let total = skip + items.length;
+  try {
+    total = await Paper.countDocuments(filter).maxTimeMS(5000);
+  } catch {
+    if (items.length === limit) total = skip + items.length + 1;
+  }
+
+  const data = {
     items,
     meta: buildMeta({ page, limit, total }),
   };
+  return memoryCache.set(cacheKey, data, LIST_CACHE_TTL_MS);
 }
 
 async function getPaperById(id) {
@@ -277,14 +325,14 @@ async function getTaxonomy() {
     system,
     featureToggles,
   ] = await Promise.all([
-    AcademicLevel.find({ isEnabled: true }).sort({ order: 1 }).lean(),
-    Programme.find({ isEnabled: true }).sort({ order: 1 }).lean(),
-    Department.find({ isEnabled: true }).sort({ order: 1 }).lean(),
-    Semester.find({ isEnabled: true }).sort({ order: 1, number: 1 }).lean(),
-    ClassNode.find({ isEnabled: true }).sort({ order: 1 }).lean(),
-    Subject.find({ isEnabled: true }).sort({ order: 1 }).lean(),
-    ResourceType.find({ isEnabled: true }).sort({ order: 1 }).lean(),
-    PaperType.find({ isEnabled: true }).sort({ order: 1 }).lean(),
+    AcademicLevel.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
+    Programme.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
+    Department.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
+    Semester.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1, number: 1 }).lean(),
+    ClassNode.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
+    Subject.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
+    ResourceType.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
+    PaperType.find({ isEnabled: true }).select(TAXONOMY_SELECT).sort({ order: 1 }).lean(),
     WebsiteSettings.findOne({ key: 'default' }).lean(),
     SystemConfig.findOne({ key: 'default' }).lean(),
     FeatureToggle.find().lean(),
