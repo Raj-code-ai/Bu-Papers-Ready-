@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { superAdminApi } from '../../services/endpoints';
 import { useInstitution } from '../../store/InstitutionContext';
 import { ErrorState, LoadingSkeleton } from '../../components/common/States';
+import { DEFAULT_BRAND_COLORS, normalizeHex } from '../../utils/brandColors';
+
+const COLOR_FIELDS = [
+  ['primaryColor', 'Primary color', DEFAULT_BRAND_COLORS.primaryColor],
+  ['secondaryColor', 'Secondary color', DEFAULT_BRAND_COLORS.secondaryColor],
+  ['accentColor', 'Accent color', DEFAULT_BRAND_COLORS.accentColor],
+];
 
 export default function SuperAdminInstitutionPage() {
   const { refresh, applyBranding } = useInstitution();
@@ -25,9 +32,9 @@ export default function SuperAdminInstitutionPage() {
           aboutText: data.aboutText || '',
           logoUrl: data.logoUrl || '',
           faviconUrl: data.faviconUrl || '',
-          primaryColor: data.primaryColor || '#1E4BD8',
-          secondaryColor: data.secondaryColor || '#1E3A8A',
-          accentColor: data.accentColor || '#C45A28',
+          primaryColor: data.primaryColor || DEFAULT_BRAND_COLORS.primaryColor,
+          secondaryColor: data.secondaryColor || DEFAULT_BRAND_COLORS.secondaryColor,
+          accentColor: data.accentColor || DEFAULT_BRAND_COLORS.accentColor,
           address: data.address || '',
           officialEmail: data.officialEmail || data.supportEmail || '',
           officialPhone: data.officialPhone || '',
@@ -88,7 +95,7 @@ export default function SuperAdminInstitutionPage() {
         logoUrl: saved.logoUrl || f.logoUrl,
         faviconUrl: saved.faviconUrl || f.faviconUrl,
       }));
-      setMessage('Institution branding saved. The public site now shows the updated name.');
+      setMessage('Institution branding saved. Name, logo, and colours now apply across the site.');
     } catch (err) {
       setError(err.response?.data?.message || err.message);
     } finally {
@@ -214,9 +221,6 @@ export default function SuperAdminInstitutionPage() {
           ['shortName', 'Short name (optional)'],
           ['siteName', 'Site name'],
           ['tagline', 'Tagline'],
-          ['primaryColor', 'Primary color'],
-          ['secondaryColor', 'Secondary color'],
-          ['accentColor', 'Accent color'],
           ['address', 'Address'],
           ['officialEmail', 'Official email'],
           ['officialPhone', 'Official phone'],
@@ -237,6 +241,49 @@ export default function SuperAdminInstitutionPage() {
             />
           </label>
         ))}
+        <div className="md:col-span-2 grid gap-4 sm:grid-cols-3">
+          {COLOR_FIELDS.map(([key, label, fallback]) => (
+            <label key={key} className="block text-sm">
+              {label}
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label={`${label} picker`}
+                  className="h-10 w-12 cursor-pointer rounded border border-ink-700/15 bg-white p-0 dark:border-white/10"
+                  value={normalizeHex(form[key], fallback)}
+                  onChange={(e) => {
+                    const nextColor = e.target.value.toUpperCase();
+                    setForm((f) => {
+                      const next = { ...f, [key]: nextColor };
+                      applyBranding({
+                        primaryColor: next.primaryColor,
+                        secondaryColor: next.secondaryColor,
+                        accentColor: next.accentColor,
+                      });
+                      return next;
+                    });
+                  }}
+                />
+                <input
+                  className="input"
+                  value={form[key]}
+                  onChange={(e) => {
+                    const nextColor = e.target.value;
+                    setForm((f) => {
+                      const next = { ...f, [key]: nextColor };
+                      applyBranding({
+                        primaryColor: next.primaryColor,
+                        secondaryColor: next.secondaryColor,
+                        accentColor: next.accentColor,
+                      });
+                      return next;
+                    });
+                  }}
+                />
+              </div>
+            </label>
+          ))}
+        </div>
         <label className="block text-sm md:col-span-2">
           About text
           <textarea

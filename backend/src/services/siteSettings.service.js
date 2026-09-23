@@ -80,17 +80,7 @@ const DEFAULT_BRANDING = {
   developers: [],
 };
 
-const LEGACY_THEME_HEX = new Set([
-  '#0F766E',
-  '#0f766e',
-  '#134E4A',
-  '#134e4a',
-  '#14B8A6',
-  '#14b8a6',
-  '#1E3A8A',
-  '#1e3a8a',
-  '#334155',
-]);
+const LEGACY_THEME_HEX = new Set(['#0F766E', '#0f766e', '#134E4A', '#134e4a', '#14B8A6', '#14b8a6']);
 
 function resolveBrandColors(plain) {
   const primary = plain.primaryColor || '';

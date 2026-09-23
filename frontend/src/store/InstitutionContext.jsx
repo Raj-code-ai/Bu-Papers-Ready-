@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { publicApi } from '../services/endpoints';
 import { writeHomeCache, writeTaxonomyCache } from '../utils/publicCache';
+import { applyBrandCssVars, DEFAULT_BRAND_COLORS } from '../utils/brandColors';
+import { useTheme } from './ThemeContext';
 
 const InstitutionContext = createContext(null);
 const BRANDING_CACHE_KEY = 'arms_site_branding_v3';
@@ -13,9 +15,7 @@ const FALLBACK = {
   aboutText: '',
   logoUrl: '',
   faviconUrl: '',
-  primaryColor: '#1E4BD8',
-  secondaryColor: '#1E3A8A',
-  accentColor: '#C45A28',
+  ...DEFAULT_BRAND_COLORS,
   address: '',
   officialEmail: '',
   officialPhone: '',
@@ -49,17 +49,7 @@ function writeCachedBranding(branding) {
   }
 }
 
-const LEGACY_THEME_HEX = new Set([
-  '#0F766E',
-  '#0f766e',
-  '#134E4A',
-  '#134e4a',
-  '#14B8A6',
-  '#14b8a6',
-  '#1E3A8A',
-  '#1e3a8a',
-  '#334155',
-]);
+const LEGACY_THEME_HEX = new Set(['#0F766E', '#0f766e', '#134E4A', '#134e4a', '#14B8A6', '#14b8a6']);
 
 function applyLogoPalette(branding) {
   const primary = branding.primaryColor || '';
@@ -96,6 +86,7 @@ function applySiteConfig(data, setBranding, setMaintenance) {
 }
 
 export function InstitutionProvider({ children }) {
+  const { theme } = useTheme();
   const [branding, setBranding] = useState(() => readCachedBranding() || FALLBACK);
   const [maintenance, setMaintenance] = useState({
     enabled: false,
@@ -153,10 +144,7 @@ export function InstitutionProvider({ children }) {
     if (titleName) {
       document.title = `${titleName} · Question Papers`;
     }
-    const root = document.documentElement;
-    root.style.removeProperty('--brand');
-    root.style.removeProperty('--brand-deep');
-    root.style.removeProperty('--brand-accent');
+    applyBrandCssVars(branding, theme);
     if (branding.faviconUrl) {
       let link = document.querySelector("link[rel='icon']");
       if (!link) {
@@ -166,7 +154,7 @@ export function InstitutionProvider({ children }) {
       }
       link.href = branding.faviconUrl;
     }
-  }, [branding]);
+  }, [branding, theme]);
 
   const ready = !loading || Boolean(branding.institutionName || branding.siteName || branding.logoUrl);
 
