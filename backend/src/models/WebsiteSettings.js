@@ -47,9 +47,9 @@ const websiteSettingsSchema = new mongoose.Schema(
     },
     logoUrl: { type: String, default: '' },
     faviconUrl: { type: String, default: '' },
-    primaryColor: { type: String, default: '#0F766E' },
-    secondaryColor: { type: String, default: '#134E4A' },
-    accentColor: { type: String, default: '#14B8A6' },
+    primaryColor: { type: String, default: '#1E4BD8' },
+    secondaryColor: { type: String, default: '#1E3A8A' },
+    accentColor: { type: String, default: '#C45A28' },
 
     // Institution contact
     address: { type: String, default: '' },

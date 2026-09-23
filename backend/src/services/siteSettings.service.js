@@ -63,9 +63,9 @@ const DEFAULT_BRANDING = {
     'This platform provides authorized academic question papers and resources for students of this institution.',
   logoUrl: '',
   faviconUrl: '',
-  primaryColor: '#0F766E',
-  secondaryColor: '#134E4A',
-  accentColor: '#14B8A6',
+  primaryColor: '#1E4BD8',
+  secondaryColor: '#1E3A8A',
+  accentColor: '#C45A28',
   address: '',
   officialEmail: '',
   officialPhone: '',
@@ -79,6 +79,34 @@ const DEFAULT_BRANDING = {
   developerLinkedinUrl: '',
   developers: [],
 };
+
+const LEGACY_THEME_HEX = new Set([
+  '#0F766E',
+  '#0f766e',
+  '#134E4A',
+  '#134e4a',
+  '#14B8A6',
+  '#14b8a6',
+  '#1E3A8A',
+  '#1e3a8a',
+  '#334155',
+]);
+
+function resolveBrandColors(plain) {
+  const primary = plain.primaryColor || '';
+  if (!primary || LEGACY_THEME_HEX.has(primary)) {
+    return {
+      primaryColor: DEFAULT_BRANDING.primaryColor,
+      secondaryColor: DEFAULT_BRANDING.secondaryColor,
+      accentColor: DEFAULT_BRANDING.accentColor,
+    };
+  }
+  return {
+    primaryColor: plain.primaryColor || DEFAULT_BRANDING.primaryColor,
+    secondaryColor: plain.secondaryColor || DEFAULT_BRANDING.secondaryColor,
+    accentColor: plain.accentColor || DEFAULT_BRANDING.accentColor,
+  };
+}
 
 const DEFAULT_DEVELOPERS = [
   {
@@ -172,9 +200,7 @@ function toPublicBranding(doc) {
     aboutText: plain.aboutText || DEFAULT_BRANDING.aboutText,
     logoUrl: absolutePhotoUrl(plain.logoUrl || ''),
     faviconUrl: absolutePhotoUrl(plain.faviconUrl || ''),
-    primaryColor: plain.primaryColor || DEFAULT_BRANDING.primaryColor,
-    secondaryColor: plain.secondaryColor || DEFAULT_BRANDING.secondaryColor,
-    accentColor: plain.accentColor || DEFAULT_BRANDING.accentColor,
+    ...resolveBrandColors(plain),
     address: plain.address || '',
     officialEmail: plain.officialEmail || plain.supportEmail || '',
     officialPhone: plain.officialPhone || '',

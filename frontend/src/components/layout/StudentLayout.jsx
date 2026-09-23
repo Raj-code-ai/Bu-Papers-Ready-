@@ -42,6 +42,7 @@ export default function StudentLayout() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-ink-700/10 bg-sand-50/80 backdrop-blur dark:border-white/10 dark:bg-ink-950/80">
+        <div className="h-0.5 w-full bg-gradient-to-r from-moss-500 via-grain to-leaf" />
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex min-w-0 items-center gap-2 focus:outline-none focus:ring-2 focus:ring-moss-300">
             {branding.logoUrl ? (

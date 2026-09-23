@@ -3,7 +3,7 @@ import { publicApi } from '../services/endpoints';
 import { writeHomeCache, writeTaxonomyCache } from '../utils/publicCache';
 
 const InstitutionContext = createContext(null);
-const BRANDING_CACHE_KEY = 'arms_site_branding_v2';
+const BRANDING_CACHE_KEY = 'arms_site_branding_v3';
 
 const FALLBACK = {
   institutionName: '',
@@ -13,9 +13,9 @@ const FALLBACK = {
   aboutText: '',
   logoUrl: '',
   faviconUrl: '',
-  primaryColor: '#0F766E',
-  secondaryColor: '#134E4A',
-  accentColor: '#14B8A6',
+  primaryColor: '#1E4BD8',
+  secondaryColor: '#1E3A8A',
+  accentColor: '#C45A28',
   address: '',
   officialEmail: '',
   officialPhone: '',
@@ -35,7 +35,7 @@ function readCachedBranding() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
-    return { ...FALLBACK, ...parsed };
+    return applyLogoPalette({ ...FALLBACK, ...parsed });
   } catch {
     return null;
   }
@@ -49,8 +49,33 @@ function writeCachedBranding(branding) {
   }
 }
 
+const LEGACY_THEME_HEX = new Set([
+  '#0F766E',
+  '#0f766e',
+  '#134E4A',
+  '#134e4a',
+  '#14B8A6',
+  '#14b8a6',
+  '#1E3A8A',
+  '#1e3a8a',
+  '#334155',
+]);
+
+function applyLogoPalette(branding) {
+  const primary = branding.primaryColor || '';
+  if (!primary || LEGACY_THEME_HEX.has(primary)) {
+    return {
+      ...branding,
+      primaryColor: FALLBACK.primaryColor,
+      secondaryColor: FALLBACK.secondaryColor,
+      accentColor: FALLBACK.accentColor,
+    };
+  }
+  return branding;
+}
+
 function normalizeBranding(data) {
-  const branding = { ...FALLBACK, ...(data?.branding || {}) };
+  const branding = applyLogoPalette({ ...FALLBACK, ...(data?.branding || {}) });
   if (!branding.institutionName && branding.siteName) {
     branding.institutionName = branding.siteName;
   }
@@ -129,8 +154,9 @@ export function InstitutionProvider({ children }) {
       document.title = `${titleName} · Question Papers`;
     }
     const root = document.documentElement;
-    root.style.setProperty('--brand', branding.primaryColor || FALLBACK.primaryColor);
-    root.style.setProperty('--brand-deep', branding.secondaryColor || FALLBACK.secondaryColor);
+    root.style.removeProperty('--brand');
+    root.style.removeProperty('--brand-deep');
+    root.style.removeProperty('--brand-accent');
     if (branding.faviconUrl) {
       let link = document.querySelector("link[rel='icon']");
       if (!link) {

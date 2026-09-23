@@ -54,7 +54,7 @@ export default function HomePage() {
         <div
           className="relative min-h-[68vh] px-4 py-20 text-sand-50"
           style={{
-            background: `linear-gradient(135deg, ${branding.secondaryColor || '#0b2424'} 0%, ${branding.primaryColor || '#0f766e'} 100%)`,
+            background: 'linear-gradient(135deg, var(--brand-deep) 0%, var(--brand) 100%)',
           }}
         >
           <div className="relative mx-auto flex max-w-6xl flex-col justify-end gap-5 pt-10">

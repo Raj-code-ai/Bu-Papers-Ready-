@@ -2,11 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Bhattadev University seal palette */
 :root {
-  --brand: #0f766e;
-  --brand-deep: #134e4a;
-  --surface: #faf8f3;
-  --ink: #0b2424;
+  --brand: #1e4bd8;
+  --brand-hover: #163db8;
+  --brand-deep: #1e3a8a;
+  --brand-accent: #c45a28;
+  --brand-gold: #d97706;
+  --brand-nature: #22a45a;
+  --surface: #f8fafc;
+  --ink: #0f172a;
+  --moss-300: 147 176 255;
+  --moss-400: 59 108 255;
+  --moss-500: 30 75 216;
+  --grain: 196 90 40;
+  --leaf: 34 164 90;
+}
+
+html.dark {
+  --brand: #3b6cff;
+  --brand-hover: #5b86ff;
+  --brand-deep: #1e4bd8;
+  --brand-accent: #e07a3d;
+  --brand-gold: #f59e0b;
+  --brand-nature: #34d399;
+  --surface: #070b14;
+  --ink: #f8fafc;
+  --moss-300: 147 176 255;
+  --moss-400: 91 134 255;
+  --moss-500: 59 108 255;
+  --grain: 224 122 61;
+  --leaf: 52 211 153;
 }
 
 html {
@@ -15,24 +41,31 @@ html {
 
 body {
   font-family: 'Source Sans 3', Segoe UI, sans-serif;
+  color: var(--ink);
   background:
-    radial-gradient(circle at 12% 10%, rgba(20, 184, 166, 0.16), transparent 35%),
-    radial-gradient(circle at 88% 0%, rgba(15, 118, 110, 0.12), transparent 30%),
-    linear-gradient(180deg, #faf8f3 0%, #f3efe6 100%);
+    radial-gradient(circle at 12% 10%, rgb(var(--moss-500) / 0.12), transparent 35%),
+    radial-gradient(circle at 88% 0%, rgb(var(--grain) / 0.1), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   min-height: 100vh;
 }
 
 .dark body,
 html.dark body {
+  color: #f8fafc;
   background:
-    radial-gradient(circle at 15% 10%, rgba(20, 184, 166, 0.12), transparent 30%),
-    linear-gradient(180deg, #071a1a 0%, #0b2424 100%);
-  color: #f3efe6;
+    radial-gradient(circle at 15% 10%, rgb(var(--moss-500) / 0.16), transparent 32%),
+    radial-gradient(circle at 90% 8%, rgb(var(--grain) / 0.1), transparent 28%),
+    linear-gradient(180deg, #070b14 0%, #111827 100%);
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-moss-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-moss-400 focus:outline-none focus:ring-2 focus:ring-moss-300;
+    @apply inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-moss-300;
+    background-color: var(--brand);
+  }
+
+  .btn-primary:hover {
+    background-color: var(--brand-hover);
   }
 
   .btn-secondary {
