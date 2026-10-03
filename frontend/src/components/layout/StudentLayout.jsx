@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useTheme } from '../../store/ThemeContext';
 import { useAuth } from '../../store/AuthContext';
@@ -7,9 +8,19 @@ import { LoadingSkeleton } from '../common/States';
 export default function StudentLayout() {
   const { toggleTheme, theme } = useTheme();
   const { user } = useAuth();
-  const { branding, maintenance, ready, loading } = useInstitution();
+  const { branding, maintenance, ready } = useInstitution();
+  const [allowShell, setAllowShell] = useState(ready);
 
-  if (!ready) {
+  useEffect(() => {
+    if (ready) {
+      setAllowShell(true);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setAllowShell(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+
+  if (!ready && !allowShell) {
     return (
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 py-16">
         <LoadingSkeleton rows={6} />

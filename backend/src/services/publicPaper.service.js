@@ -288,7 +288,8 @@ async function getLatest(limit = 10) {
     .populate(publicPopulate)
     .sort({ createdAt: -1 })
     .limit(safeLimit)
-    .select('-storage.raw -fileHash')
+    .select(LIST_SELECT)
+    .maxTimeMS(8000)
     .lean();
   return memoryCache.set(cacheKey, items, PUBLIC_CACHE_TTL_MS);
 }
@@ -303,7 +304,8 @@ async function getPopular(limit = 10) {
     .populate(publicPopulate)
     .sort({ downloadCount: -1, viewCount: -1 })
     .limit(safeLimit)
-    .select('-storage.raw -fileHash')
+    .select(LIST_SELECT)
+    .maxTimeMS(8000)
     .lean();
   return memoryCache.set(cacheKey, items, PUBLIC_CACHE_TTL_MS);
 }

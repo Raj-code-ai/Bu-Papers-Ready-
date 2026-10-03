@@ -96,19 +96,18 @@ export function InstitutionProvider({ children }) {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    const [siteRes] = await Promise.all([
-      publicApi.siteConfig(),
-      publicApi
-        .home({ latestLimit: 6, popularLimit: 6 })
-        .then((res) => {
-          const data = res.data.data;
-          if (data) {
-            writeHomeCache(data);
-            if (data.taxonomy) writeTaxonomyCache(data.taxonomy);
-          }
-        })
-        .catch(() => {}),
-    ]);
+    publicApi
+      .home({ latestLimit: 6, popularLimit: 6 })
+      .then((res) => {
+        const data = res.data.data;
+        if (data) {
+          writeHomeCache(data);
+          if (data.taxonomy) writeTaxonomyCache(data.taxonomy);
+        }
+      })
+      .catch(() => {});
+
+    const siteRes = await publicApi.siteConfig();
     const data = siteRes.data.data;
     applySiteConfig(data, setBranding, setMaintenance);
     setError('');
