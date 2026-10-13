@@ -4,6 +4,14 @@ const logger = require('./logger');
 
 let isConnected = false;
 let listenersAttached = false;
+let lastConnectDurationMs = null;
+let connectedAtMs = null;
+
+const POOL = {
+  maxPoolSize: 20,
+  minPoolSize: 1,
+  maxIdleTimeMS: 300000,
+};
 
 function attachConnectionListeners() {
   if (listenersAttached) return;
@@ -44,13 +52,24 @@ async function connectDatabaseOnce() {
   mongoose.set('bufferTimeoutMS', 5000);
   attachConnectionListeners();
 
+  const started = Date.now();
   await mongoose.connect(env.mongodbUri, {
     dbName: env.mongodbDbName,
-    maxPoolSize: 20,
+    maxPoolSize: POOL.maxPoolSize,
+    minPoolSize: POOL.minPoolSize,
+    maxIdleTimeMS: POOL.maxIdleTimeMS,
     serverSelectionTimeoutMS: 15000,
+    socketTimeoutMS: 45000,
   });
-
+  lastConnectDurationMs = Date.now() - started;
+  connectedAtMs = Date.now();
   isConnected = mongoose.connection.readyState === 1;
+  logger.info('MongoDB connection ready', {
+    durationMs: lastConnectDurationMs,
+    readyState: mongoose.connection.readyState,
+    maxPoolSize: POOL.maxPoolSize,
+    minPoolSize: POOL.minPoolSize,
+  });
   return mongoose.connection;
 }
 
@@ -81,6 +100,7 @@ async function disconnectDatabase() {
   if (mongoose.connection.readyState === 0) return;
   await mongoose.disconnect();
   isConnected = false;
+  connectedAtMs = null;
 }
 
 function getDatabaseStatus() {
@@ -96,6 +116,10 @@ function getDatabaseStatus() {
     status: states[mongoose.connection.readyState] || 'unknown',
     name: mongoose.connection.name || env.mongodbDbName,
     configured: Boolean(env.mongodbUri),
+    lastConnectDurationMs,
+    connectedForMs: connectedAtMs ? Date.now() - connectedAtMs : null,
+    maxPoolSize: POOL.maxPoolSize,
+    minPoolSize: POOL.minPoolSize,
   };
 }
 

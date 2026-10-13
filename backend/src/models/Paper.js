@@ -128,6 +128,9 @@ paperSchema.index({ title: 'text', description: 'text', originalFileName: 'text'
 paperSchema.index({ academicLevelId: 1, departmentId: 1, isDeleted: 1, status: 1 });
 paperSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
 paperSchema.index({ isDeleted: 1, status: 1, downloadCount: -1, viewCount: -1 });
+paperSchema.index({ isDeleted: 1, status: 1, subjectId: 1, createdAt: -1 });
+paperSchema.index({ isDeleted: 1, status: 1, resourceTypeId: 1, createdAt: -1 });
+paperSchema.index({ isDeleted: 1, status: 1, academicLevelId: 1, createdAt: -1 });
 paperSchema.index({ isDeleted: 1, status: 1, semesterId: 1, createdAt: -1 });
 paperSchema.index({ isDeleted: 1, status: 1, departmentId: 1, createdAt: -1 });
 

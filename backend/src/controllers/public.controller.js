@@ -86,7 +86,8 @@ const popularPapers = asyncHandler(async (req, res) => {
  */
 const getPaper = asyncHandler(async (req, res) => {
   assertDatabaseReady();
-  const data = await publicPaperService.getPaperById(req.params.id);
+  const data = await publicPaperService.getPaperById(req.params.id, { requestId: req.requestId });
+  res.set('Cache-Control', 'private, no-store');
   return success(res, data, 'Paper fetched');
 });
 

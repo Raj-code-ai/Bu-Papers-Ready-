@@ -14,6 +14,7 @@ const { createGlobalRateLimiter } = require('./config/rateLimit');
 const { buildSwaggerSpec } = require('./config/swagger');
 
 const requestIdMiddleware = require('./middlewares/requestId.middleware');
+const requestTimingMiddleware = require('./middlewares/requestTiming.middleware');
 const maintenanceMiddleware = require('./middlewares/maintenance.middleware');
 const notFoundMiddleware = require('./middlewares/notFound.middleware');
 const errorMiddleware = require('./middlewares/error.middleware');
@@ -28,6 +29,7 @@ function createApp() {
   app.disable('x-powered-by');
 
   app.use(requestIdMiddleware);
+  app.use(requestTimingMiddleware);
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },

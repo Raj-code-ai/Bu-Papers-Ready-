@@ -22,6 +22,11 @@ const {
   computeFileHash,
 } = require('../storage/storage.service');
 const env = require('../config/env');
+const memoryCache = require('../utils/memoryCache');
+
+function invalidatePublicPaperCaches() {
+  memoryCache.invalidatePublicPaperReads();
+}
 
 function clientMeta(context = {}) {
   return {
@@ -304,6 +309,7 @@ async function uploadPaper(adminUser, file, body, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 
@@ -377,6 +383,7 @@ async function updateMetadata(adminUser, paperId, body, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 
@@ -428,6 +435,7 @@ async function replacePaperPdf(adminUser, paperId, file, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 
@@ -451,6 +459,7 @@ async function softDeletePaper(adminUser, paperId, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 
@@ -493,6 +502,7 @@ async function restorePaper(adminUser, paperId, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 
@@ -525,6 +535,7 @@ async function permanentDeletePaper(adminUser, paperId, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return { deleted: true, id: paperId };
 }
 
@@ -642,6 +653,7 @@ async function publishPaper(adminUser, paperId, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 
@@ -664,6 +676,7 @@ async function unpublishPaper(adminUser, paperId, context = {}) {
     ...meta,
   });
 
+  invalidatePublicPaperCaches();
   return paper;
 }
 

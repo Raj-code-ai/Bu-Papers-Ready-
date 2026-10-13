@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { publicApi } from '../services/endpoints';
 import { writeHomeCache, writeTaxonomyCache } from '../utils/publicCache';
 import { applyBrandCssVars, DEFAULT_BRAND_COLORS } from '../utils/brandColors';
@@ -94,8 +94,12 @@ export function InstitutionProvider({ children }) {
   });
   const [loading, setLoading] = useState(() => !readCachedBranding());
   const [error, setError] = useState('');
+  const lastRefreshAt = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ skipIfFresh } = {}) => {
+    if (skipIfFresh && lastRefreshAt.current && Date.now() - lastRefreshAt.current < 45_000) {
+      return null;
+    }
     publicApi
       .home({ latestLimit: 6, popularLimit: 6 })
       .then((res) => {
@@ -110,6 +114,7 @@ export function InstitutionProvider({ children }) {
     const siteRes = await publicApi.siteConfig();
     const data = siteRes.data.data;
     applySiteConfig(data, setBranding, setMaintenance);
+    lastRefreshAt.current = Date.now();
     setError('');
     return data;
   }, []);
@@ -132,7 +137,7 @@ export function InstitutionProvider({ children }) {
 
   useEffect(() => {
     const onFocus = () => {
-      refresh().catch(() => {});
+      refresh({ skipIfFresh: true }).catch(() => {});
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);

@@ -2,19 +2,58 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { publicApi } from '../../services/endpoints';
 import { ErrorState, LoadingSkeleton } from '../../components/common/States';
+import { fetchPublicPaper } from '../../utils/paperRequest';
+import { findCachedPaper, writePaperDetailCache } from '../../utils/publicCache';
+
+function MetaItem({ label, value }) {
+  return (
+    <div>
+      <dt className="text-ink-700/60 dark:text-sand-100/60">{label}</dt>
+      <dd className="font-semibold">{value || '—'}</dd>
+    </div>
+  );
+}
 
 export default function PaperDetailPage() {
   const { id } = useParams();
-  const [paper, setPaper] = useState(null);
+  const cached = findCachedPaper(id);
+  const [paper, setPaper] = useState(cached);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
-    publicApi
-      .paper(id)
-      .then((res) => setPaper(res.data.data))
-      .catch((err) => setError(err.response?.data?.message || err.message))
-      .finally(() => setLoading(false));
+    const preview = findCachedPaper(id);
+    if (preview) {
+      setPaper(preview);
+      setLoading(false);
+    } else {
+      setPaper(null);
+      setLoading(true);
+    }
+    setError('');
+
+    let cancelled = false;
+    fetchPublicPaper(id)
+      .then((res) => {
+        if (cancelled) return;
+        const next = res.data.data;
+        setPaper(next);
+        writePaperDetailCache(next);
+        setError('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (!preview) {
+          setError(err.response?.data?.message || err.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   async function handleView() {
@@ -27,12 +66,13 @@ export default function PaperDetailPage() {
     window.open(data.data.downloadUrl, '_blank', 'noopener,noreferrer');
   }
 
-  if (loading) return <LoadingSkeleton rows={4} />;
-  if (error) return <ErrorState message={error} />;
+  if (loading && !paper) return <LoadingSkeleton rows={4} />;
+  if (error && !paper) return <ErrorState message={error} />;
   if (!paper) return null;
 
   return (
     <article className="panel space-y-5">
+      {loading ? <LoadingSkeleton rows={1} /> : null}
       <div>
         <p className="text-sm uppercase tracking-wide text-moss-500">
           {paper.resourceTypeId?.name || 'Resource'}
@@ -44,18 +84,14 @@ export default function PaperDetailPage() {
       </div>
 
       <dl className="grid gap-3 sm:grid-cols-2 text-sm">
-        <div>
-          <dt className="text-ink-700/60 dark:text-sand-100/60">Subject</dt>
-          <dd className="font-semibold">{paper.subjectId?.name || '—'}</dd>
-        </div>
-        <div>
-          <dt className="text-ink-700/60 dark:text-sand-100/60">Views</dt>
-          <dd className="font-semibold">{paper.viewCount || 0}</dd>
-        </div>
-        <div>
-          <dt className="text-ink-700/60 dark:text-sand-100/60">Downloads</dt>
-          <dd className="font-semibold">{paper.downloadCount || 0}</dd>
-        </div>
+        <MetaItem label="Subject" value={paper.subjectId?.name} />
+        <MetaItem label="Semester" value={paper.semesterId?.name} />
+        <MetaItem label="Year" value={paper.academicYearId?.name} />
+        <MetaItem label="Department" value={paper.departmentId?.name} />
+        <MetaItem label="Programme" value={paper.programmeId?.name} />
+        <MetaItem label="Paper type" value={paper.paperTypeId?.name} />
+        <MetaItem label="Views" value={paper.viewCount || 0} />
+        <MetaItem label="Downloads" value={paper.downloadCount || 0} />
       </dl>
 
       <div className="flex flex-wrap gap-3">

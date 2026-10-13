@@ -19,13 +19,18 @@ const { parsePagination, buildMeta, parseSort } = require('../utils/pagination')
 const { writeAuditLog } = require('./auditLog.service');
 const AnalyticsEvent = require('../models/AnalyticsEvent');
 const memoryCache = require('../utils/memoryCache');
+const logger = require('../config/logger');
+const { getDatabaseStatus } = require('../config/db');
 
 const PUBLIC_CACHE_TTL_MS = 45_000;
 const LIST_CACHE_TTL_MS = 30_000;
+const DETAIL_CACHE_TTL_MS = 20_000;
 const TAXONOMY_SELECT =
   'name slug kind order academicLevelId programmeId parentProgrammeId departmentId semesterId classNodeId number code featureKey';
 const LIST_SELECT =
-  'title downloadCount viewCount academicLevelId programmeId departmentId semesterId classNodeId subjectId resourceTypeId paperTypeId createdAt';
+  'title downloadCount viewCount academicLevelId programmeId departmentId semesterId classNodeId subjectId resourceTypeId paperTypeId academicYearId createdAt';
+const DETAIL_SELECT =
+  'title description academicLevelId programmeId departmentId semesterId classNodeId subjectId resourceTypeId paperTypeId academicYearId viewCount downloadCount createdAt originalFileName mimeType fileSizeBytes tags storage.url storage.secureUrl storage.format storage.bytes storage.provider';
 
 function asObjectId(value) {
   if (!value) return null;
@@ -174,20 +179,62 @@ async function listPapers(query) {
   return memoryCache.set(cacheKey, data, LIST_CACHE_TTL_MS);
 }
 
-async function getPaperById(id) {
+function paperDetailCacheKey(id) {
+  return `public-paper:${id}`;
+}
+
+async function getPaperById(id, context = {}) {
+  const started = Date.now();
+  const cacheKey = paperDetailCacheKey(id);
+  const cached = memoryCache.get(cacheKey);
+  if (cached) {
+    logger.debug('public.paper.detail', {
+      requestId: context.requestId || null,
+      cacheHit: true,
+      durationMs: Date.now() - started,
+      queryMs: 0,
+      dbStatus: getDatabaseStatus().status,
+      processUptimeSec: Math.round(process.uptime()),
+    });
+    return cached;
+  }
+
+  const queryStarted = Date.now();
   const paper = await Paper.findOne({
     _id: id,
     isDeleted: false,
     status: 'published',
   })
+    .select(DETAIL_SELECT)
     .populate(publicPopulate)
-    .select('-storage.raw')
+    .maxTimeMS(8000)
     .lean();
+  const queryMs = Date.now() - queryStarted;
 
   if (!paper) {
+    logger.info('public.paper.detail', {
+      requestId: context.requestId || null,
+      cacheHit: false,
+      found: false,
+      durationMs: Date.now() - started,
+      queryMs,
+      dbStatus: getDatabaseStatus().status,
+      processUptimeSec: Math.round(process.uptime()),
+    });
     throw new AppError('Paper not found', 404, 'NOT_FOUND');
   }
 
+  memoryCache.set(cacheKey, paper, DETAIL_CACHE_TTL_MS);
+  logger.info('public.paper.detail', {
+    requestId: context.requestId || null,
+    cacheHit: false,
+    found: true,
+    durationMs: Date.now() - started,
+    queryMs,
+    dbStatus: getDatabaseStatus().status,
+    processUptimeSec: Math.round(process.uptime()),
+    connectedForMs: getDatabaseStatus().connectedForMs,
+  });
   return paper;
 }
 

@@ -23,8 +23,23 @@ function del(key) {
   store.delete(key);
 }
 
+function delByPrefix(prefix) {
+  for (const key of store.keys()) {
+    if (key.startsWith(prefix)) store.delete(key);
+  }
+}
+
 function clear() {
   store.clear();
 }
 
-module.exports = { get, set, del, clear };
+function invalidatePublicPaperReads() {
+  delByPrefix('public-paper');
+  delByPrefix('public-papers:');
+  delByPrefix('public-home:');
+  delByPrefix('public-stats');
+  delByPrefix('public-latest:');
+  delByPrefix('public-popular:');
+}
+
+module.exports = { get, set, del, delByPrefix, clear, invalidatePublicPaperReads };
