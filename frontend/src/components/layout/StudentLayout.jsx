@@ -8,7 +8,7 @@ import { LoadingSkeleton } from '../common/States';
 export default function StudentLayout() {
   const { toggleTheme, theme } = useTheme();
   const { user } = useAuth();
-  const { branding, maintenance, ready } = useInstitution();
+  const { branding, maintenance, ready, loading } = useInstitution();
   const [allowShell, setAllowShell] = useState(ready);
 
   useEffect(() => {
