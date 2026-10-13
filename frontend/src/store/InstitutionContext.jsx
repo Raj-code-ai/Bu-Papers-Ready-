@@ -148,7 +148,11 @@ export function InstitutionProvider({ children }) {
     if (titleName) {
       document.title = `${titleName} · Question Papers`;
     }
-    applyBrandCssVars(branding, theme);
+    try {
+      applyBrandCssVars(branding, theme);
+    } catch {
+      // Keep the page visible if a custom colour value is invalid.
+    }
     if (branding.faviconUrl) {
       let link = document.querySelector("link[rel='icon']");
       if (!link) {

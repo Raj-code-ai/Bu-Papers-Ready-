@@ -5,18 +5,21 @@ import App from './App';
 import { AuthProvider } from './store/AuthContext';
 import { ThemeProvider } from './store/ThemeContext';
 import { InstitutionProvider } from './store/InstitutionContext';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ThemeProvider>
-        <InstitutionProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </InstitutionProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ThemeProvider>
+          <InstitutionProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </InstitutionProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

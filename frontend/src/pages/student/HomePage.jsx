@@ -10,8 +10,8 @@ export default function HomePage() {
   const { branding } = useInstitution();
   const cached = readHomeCache();
   const [stats, setStats] = useState(cached?.stats || null);
-  const [latest, setLatest] = useState(cached?.latest || []);
-  const [popular, setPopular] = useState(cached?.popular || []);
+  const [latest, setLatest] = useState(Array.isArray(cached?.latest) ? cached.latest : []);
+  const [popular, setPopular] = useState(Array.isArray(cached?.popular) ? cached.popular : []);
   const [taxonomy, setTaxonomy] = useState(cached?.taxonomy || null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(!cached);
@@ -25,8 +25,8 @@ export default function HomePage() {
         if (cancelled) return;
         const data = res.data.data || {};
         setStats(data.stats || null);
-        setLatest(data.latest || []);
-        setPopular(data.popular || []);
+        setLatest(Array.isArray(data.latest) ? data.latest : []);
+        setPopular(Array.isArray(data.popular) ? data.popular : []);
         setTaxonomy(data.taxonomy || null);
         writeHomeCache(data);
         if (data.taxonomy) writeTaxonomyCache(data.taxonomy);

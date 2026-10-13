@@ -5,8 +5,13 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem('arms_user');
-    return raw ? JSON.parse(raw) : null;
+    try {
+      const raw = localStorage.getItem('arms_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      localStorage.removeItem('arms_user');
+      return null;
+    }
   });
   const [mustSetupTwoFactor, setMustSetupTwoFactor] = useState(
     () => localStorage.getItem('arms_must_setup_2fa') === 'true'

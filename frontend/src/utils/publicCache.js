@@ -25,9 +25,19 @@ export function readHomeCache() {
   return readJson(HOME_CACHE_KEY);
 }
 
+const PAPER_DETAIL_PREFIX = 'arms_public_paper_detail_v1:';
+const PAPER_DETAIL_TTL_MS = 60_000;
+
+export function writePaperDetailCache(paper) {
+  if (!paper || !paper._id) return;
+  writeJson(`${PAPER_DETAIL_PREFIX}${paper._id}`, { savedAt: Date.now(), data: paper });
+}
+
 export function writeHomeCache(data) {
   writeJson(HOME_CACHE_KEY, data);
-  [...(data?.latest || []), ...(data?.popular || [])].forEach((paper) => writePaperDetailCache(paper));
+  const latest = Array.isArray(data?.latest) ? data.latest : [];
+  const popular = Array.isArray(data?.popular) ? data.popular : [];
+  [...latest, ...popular].forEach((paper) => writePaperDetailCache(paper));
 }
 
 export function readTaxonomyCache() {
@@ -59,15 +69,7 @@ export function readPapersCache(params) {
 
 export function writePapersCache(params, data) {
   writeJson(papersCacheKey(params), { savedAt: Date.now(), data });
-  (data?.items || []).forEach((paper) => writePaperDetailCache(paper));
-}
-
-const PAPER_DETAIL_PREFIX = 'arms_public_paper_detail_v1:';
-const PAPER_DETAIL_TTL_MS = 60_000;
-
-export function writePaperDetailCache(paper) {
-  if (!paper || !paper._id) return;
-  writeJson(`${PAPER_DETAIL_PREFIX}${paper._id}`, { savedAt: Date.now(), data: paper });
+  (Array.isArray(data?.items) ? data.items : []).forEach((paper) => writePaperDetailCache(paper));
 }
 
 export function readPaperDetailCache(id) {
@@ -84,6 +86,9 @@ export function findCachedPaper(id) {
   const detail = readPaperDetailCache(id);
   if (detail) return detail;
   const home = readHomeCache();
-  const lists = [...(home?.latest || []), ...(home?.popular || [])];
+  const lists = [
+    ...(Array.isArray(home?.latest) ? home.latest : []),
+    ...(Array.isArray(home?.popular) ? home.popular : []),
+  ];
   return lists.find((item) => String(item?._id) === String(id)) || null;
 }

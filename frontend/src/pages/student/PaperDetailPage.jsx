@@ -36,7 +36,11 @@ export default function PaperDetailPage() {
     fetchPublicPaper(id)
       .then((res) => {
         if (cancelled) return;
-        const next = res.data.data;
+        const next = res.data?.data;
+        if (!next) {
+          if (!preview) setError('Unable to load this paper.');
+          return;
+        }
         setPaper(next);
         writePaperDetailCache(next);
         setError('');
@@ -68,7 +72,7 @@ export default function PaperDetailPage() {
 
   if (loading && !paper) return <LoadingSkeleton rows={4} />;
   if (error && !paper) return <ErrorState message={error} />;
-  if (!paper) return null;
+  if (!paper) return <ErrorState message="This paper is not available." />;
 
   return (
     <article className="panel space-y-5">
